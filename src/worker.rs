@@ -184,6 +184,10 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         let start = Instant::now();
 
                         let total_sum = (total * threads) as f64;
+
+                        let eprint_timeout = 300; // unit: seconds
+                        let mut eprint_started: Option<Instant> = None;
+
                         loop {
                             smol::Timer::after(Duration::from_secs(1)).await;
 
@@ -210,15 +214,57 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                 .clone()
                                 .swap_many((erg_per_day * 10000.0) as u128, 0);
                             let mel_per_day = mel_per_day as f64 / 10000.0;
-                            let summary = wallet.summary().await.unwrap();
+
+                            let summary = match wallet.summary().await {
+                                Ok(s) => {
+                                    if let Some(_) = eprint_started {
+                                        // clear the brfore error message...
+                                        eprint!("{}", " ".repeat(70));
+                                        eprint_started = None;
+                                    }
+
+                                    s
+                                },
+                                Err(e) => {
+                                    eprint!("  [ERR] Failed to get wallet summary: {:?}", e);
+
+                                    if let None = eprint_started {
+                                        eprint_started = Some(Instant::now());
+                                    }
+
+                                    {
+                                        // display warning message...
+                                        let mut new = worker.lock().unwrap().add_child(format!("[WARNING] Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered."));
+                                        new.init(None, None);
+                                        _space = Some(new);
+                                    }
+
+                                    // this check is mainly to prevent un-necessary CPU-time waste.
+                                    if eprint_started.unwrap().elapsed().as_secs() > eprint_timeout {
+                                        println!("[ERROR] the daemon connection recovery failed because timeout-ed! ({}s)", eprint_timeout);
+
+                                        let orig_hook = std::panic::take_hook();
+                                        std::panic::set_hook(Box::new(move |panic_info| {
+                                            orig_hook(panic_info);
+                                            std::process::exit(1);
+                                        }));
+
+                                        panic!("because still does not recovery the daemon connection, so exit minting to avoid waste the CPU computing resources.");
+                                    }
+
+                                    // to retry...
+                                    continue;
+                                }
+                            };
                             let mel_balance = summary.detailed_balance.get("6d").unwrap();
+
                             let mut new = worker.lock().unwrap().add_child(format!(
                                 "current progress: {} | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL | fee reserve: {} MEL",
                                 if curr_sum <= 0.0 { "N/A".to_string() } else { format!("{:.2} %", 100.0/(total_sum/curr_sum)) },
                                 dosc_per_day, erg_per_day, mel_per_day, mel_balance
                             ));
                             new.init(None, None);
-                            _space = Some(new)
+                            _space = Some(new);
                         }
                     }))
                 };
