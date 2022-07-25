@@ -1,12 +1,12 @@
 [package]
-name = "melminter"
+name = "melminter-mod"
 version = "0.7.0"
-authors = ["nullchinchilla <nullchinchilla@pm.me>"]
+authors = ["nullchinchilla <nullchinchilla@pm.me>", "mkn <email@please.see.git.commit>"]
 edition = "2018"
 
-description = "official Melmint client"
+description = "Melmint client (modified by mkn)"
 license = "MPL-2.0"
-repository = "https://github.com/themeliolabs/melminter"
+repository = "https://github.com/mknnix/melminter-mod"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
