@@ -29,6 +29,7 @@ pub struct WorkerConfig {
     pub tree: prodash::Tree,
     pub threads: usize,
     pub diff: Option<usize>, // "Some" if difficulty is fixed, else automatic diff
+    pub profit_safe: bool,  // defaults True, will quit processs if a negative profit detected...
 }
 
 /// Represents a worker.
@@ -63,9 +64,13 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let is_testnet = opts.wallet.summary().await?.network == NetID::Testnet;
         let client = get_valclient(is_testnet, opts.connect).await?;
 
-        let mint_state = MintState::new(opts.wallet.clone(), client.clone());
+        let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
+        let quit_without_profit = opts.profit_safe;
 
         loop {
+            mint_state.recording_balance().await.unwrap();
+            mint_state.balance_failsafe(quit_without_profit);
+
             // turn off gracefully
             if recv_stop.try_recv().is_ok() {
                 return Ok::<_, surf::Error>(());
@@ -109,6 +114,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     "transferring {} MEL of profits to backup wallet",
                     our_mels
                 ));
+
                 let to_send = opts
                     .wallet
                     .prepare_transaction(
@@ -127,6 +133,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .await?;
                 let h = opts.wallet.send_tx(to_send).await?;
                 opts.wallet.wait_transaction(h).await?;
+
+                mint_state.reset_balances();
             }
 
             let my_difficulty = {
@@ -185,7 +193,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                         let total_sum = (total * threads) as f64;
 
-                        let eprint_timeout = 300; // unit: seconds
+                        let eprint_timeout = 600; // unit: seconds
                         let mut eprint_started: Option<Instant> = None;
 
                         loop {
@@ -246,7 +254,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                         let orig_hook = std::panic::take_hook();
                                         std::panic::set_hook(Box::new(move |panic_info| {
                                             orig_hook(panic_info);
-                                            std::process::exit(1);
+                                            std::process::exit(90);
                                         }));
 
                                         panic!("because still does not recovery the daemon connection, so exit minting to avoid waste the CPU computing resources.");

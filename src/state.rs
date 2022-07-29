@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use anyhow::Context;
 use melwallet_client::WalletClient;
@@ -16,6 +17,9 @@ use crate::repeat_fallible;
 pub struct MintState {
     wallet: WalletClient,
     client: ValClient,
+
+    // store the history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
+    balance_history: Vec<(SystemTime, CoinValue)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -26,7 +30,74 @@ struct PrepareReq {
 
 impl MintState {
     pub fn new(wallet: WalletClient, client: ValClient) -> Self {
-        Self { wallet, client }
+        Self { wallet, client, balance_history: vec![] }
+    }
+
+    pub async fn recording_balance(&mut self) -> surf::Result<CoinValue> {
+        let amount = self.wallet.summary().await?
+            .detailed_balance.get("6d")
+            .copied().unwrap_or(CoinValue(0));
+
+        let mut found = false;
+        for (_, it) in &self.balance_history {
+            if it == &amount {
+                found = true;
+                break;
+            }
+        }
+
+        if ! found {
+            let now = SystemTime::now();
+            self.balance_history.push((now, amount));
+        }
+
+        Ok(amount)
+    }
+
+    pub fn reset_balances(&mut self) {
+        // this should be called only on happen 0.5 profit transaction, or other non-minting balance changes
+        self.balance_history = vec![];
+    }
+
+    #[allow(non_snake_case)]
+    pub fn balance_failsafe(&self, quit: bool) {
+        // 0.02 MEL as the max costs for minting...
+        let MAX_LOST = CoinValue::from_millions(1u8) / 50;
+        //let MAX_LOST = CoinValue(1000); // debug...
+
+        let bal = self.balance_history.clone();
+        eprintln!("(debug) our balance history: {:?}", bal);
+
+        let bal_len = bal.len();
+        if bal_len < 2 {
+            return;
+        }
+
+        let mut lost_coins = CoinValue(0);
+        for i in 0..bal_len {
+            let (curr_time, curr_coins) = bal[i];
+            if i <= 0 { continue; }
+            let (prev_time, prev_coins) = bal[i-1];
+
+            assert!(prev_time < curr_time);
+            if prev_coins > curr_coins {
+                let lost = prev_coins - curr_coins;
+                println!("WARNING: our MEL coins losts! the mint profit might be a negative! prev coins: {} -> curr coins: {} (lost coins: {})", prev_coins, curr_coins, lost);
+                lost_coins += lost;
+            }
+        }
+
+        if lost_coins >= MAX_LOST {
+            if quit {
+                let orig_hook = std::panic::take_hook();
+                std::panic::set_hook(Box::new(move |panic_info| {
+                    orig_hook(panic_info);
+                    std::process::exit(91);
+                }));
+
+                panic!(format!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, MAX_LOST));
+            }
+        }
     }
 
     /// Generates a list of "seed" coins.
@@ -196,6 +267,7 @@ impl MintState {
                 vec![],
             )
             .await?;
+
         let txhash = self.wallet.send_tx(tx).await?;
         self.wallet.wait_transaction(txhash).await?;
         Ok(())

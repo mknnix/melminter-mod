@@ -128,6 +128,7 @@ fn main() -> surf::Result<()> {
             tree: dash_root.clone(),
             threads: opts.threads.unwrap_or_else(num_cpus::get_physical),
             diff: opts.fixed_diff,
+            profit_safe: (!opts.disable_profit_failsafe),
         }));
 
         smol::future::pending().await

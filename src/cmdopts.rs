@@ -31,6 +31,10 @@ pub struct CmdOpts {
     pub skip_amount_check: bool,
 
     #[structopt(long)]
+    /// Is the negative-profit failsafe check should be disabled? (PLEASE NOTE: use only for debugging!)
+    pub disable_profit_failsafe: bool,
+
+    #[structopt(long)]
     /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one. (PLEASE NOTE: this value should be chosen carefully! if you enter a too small value, your incomes may not be cover the expenses, because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
     pub fixed_diff: Option<usize>,
 
