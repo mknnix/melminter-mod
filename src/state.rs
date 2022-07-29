@@ -99,7 +99,7 @@ impl MintState {
         if lost_coins > CoinValue(0) {
             let (first_time, first_coins) = bal[0];
             let (now_time, now_coins) = bal[bal_len - 1];
-            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> now coins: {} (lost coins: {})", now_time.duration_since(first_time).unwrap_or(Duration::new(0, 0)), first_coins, now_coins, now_coins - first_coins);
+            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> now coins: {} (lost coins: - {})", now_time.duration_since(first_time).unwrap_or(Duration::new(0, 0)), first_coins, now_coins, first_coins-now_coins);
         }
 
         if lost_coins >= MAX_LOST {
