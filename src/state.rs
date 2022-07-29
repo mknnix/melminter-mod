@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
 
 use anyhow::Context;
 use melwallet_client::WalletClient;
@@ -80,11 +80,26 @@ impl MintState {
             let (prev_time, prev_coins) = bal[i-1];
 
             assert!(prev_time < curr_time);
-            if prev_coins > curr_coins {
-                let lost = prev_coins - curr_coins;
-                println!("WARNING: our MEL coins losts! the mint profit might be a negative! prev coins: {} -> curr coins: {} (lost coins: {})", prev_coins, curr_coins, lost);
-                lost_coins += lost;
+
+            let profits: i128 = (curr_coins.0 as i128) - (prev_coins.0 as i128);
+            if profits == 0 { continue; }
+
+            if profits < 0 {
+                lost_coins += CoinValue((-profits) as u128);
+            } else if lost_coins > CoinValue(0) {
+                let p = CoinValue(profits as u128);
+                if lost_coins <= p {
+                    lost_coins = CoinValue(0);
+                } else {
+                    lost_coins -= p;
+                }
             }
+        }
+
+        if lost_coins > CoinValue(0) {
+            let (first_time, first_coins) = bal[0];
+            let (now_time, now_coins) = bal[bal_len - 1];
+            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> now coins: {} (lost coins: {})", now_time.duration_since(first_time).unwrap_or(Duration::new(0, 0)), first_coins, now_coins, now_coins - first_coins);
         }
 
         if lost_coins >= MAX_LOST {
@@ -95,7 +110,7 @@ impl MintState {
                     std::process::exit(91);
                 }));
 
-                panic!(format!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, MAX_LOST));
+                panic!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, MAX_LOST);
             }
         }
     }
