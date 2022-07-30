@@ -69,7 +69,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
         loop {
             mint_state.recording_balance().await.unwrap();
-            mint_state.balance_failsafe(quit_without_profit);
 
             // turn off gracefully
             if recv_stop.try_recv().is_ok() {
@@ -137,6 +136,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 mint_state.reset_balances();
             }
 
+            // check profit status, and/or quitting without incomes
+            mint_state.balance_failsafe(quit_without_profit);
+
             let my_difficulty = {
                 let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
                 match opts.diff {
@@ -155,7 +157,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     approx_iter,
                 ),
             );
-            // repeat because wallet could be out of money
+
             let threads = opts.threads;
             let fastest_speed = client.snapshot().await?.current_header().dosc_speed as f64 / 30.0;
             worker.lock().unwrap().info(format!(
@@ -172,6 +174,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 sub.init(None, None);
                 mint_state.generate_seeds(threads).await?;
             }
+
+            // repeat because wallet could be out of money
             let batch: Vec<(CoinID, CoinDataHeight, Vec<u8>)> = repeat_fallible(|| {
                 let mint_state = &mint_state;
                 let subworkers = Arc::new(DashMap::new());
