@@ -27,12 +27,16 @@ pub struct CmdOpts {
     pub threads: Option<usize>,
 
     #[structopt(long)]
-    /// Is this program should be skipping the check that require amount is greater than or equal to 0.05
-    pub skip_amount_check: bool,
+    /// Is this program should be skipping the check that require balance is greater than or equal to 0.05
+    pub skip_fee_check: bool,
 
     #[structopt(long)]
     /// Is the negative-profit failsafe check should be disabled? (PLEASE NOTE: use only for debugging!)
     pub disable_profit_failsafe: bool,
+
+    #[structopt(long)]
+    /// Manual specify a "max losts" value for balance safe, or defaults to 0.02 (unit: MEL, for example 0.0321)
+    pub balance_max_losts: Option<String>,
 
     #[structopt(long)]
     /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one. (PLEASE NOTE: this value should be chosen carefully! if you enter a too small value, your incomes may not be cover the expenses, because the ERG you minted may not be enough to cover the network fee for doscMint transactions)

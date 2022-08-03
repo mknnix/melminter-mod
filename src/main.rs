@@ -117,7 +117,7 @@ fn main() -> surf::Result<()> {
             ));
             smol::Timer::after(Duration::from_secs(1)).await;
 
-            if opts.skip_amount_check { break; }
+            if opts.skip_fee_check { break; }
         }
 
         workers.push(Worker::start(WorkerConfig {
@@ -127,8 +127,8 @@ fn main() -> surf::Result<()> {
             name: "".into(),
             tree: dash_root.clone(),
             threads: opts.threads.unwrap_or_else(num_cpus::get_physical),
-            diff: opts.fixed_diff,
-            profit_safe: (!opts.disable_profit_failsafe),
+
+            cli_opts: opts.clone(),
         }));
 
         smol::future::pending().await

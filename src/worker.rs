@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{repeat_fallible, state::MintState};
+use crate::{repeat_fallible, state::MintState, CmdOpts};
 use dashmap::{mapref::multiple::RefMulti, DashMap};
 use melwallet_client::WalletClient;
 use prodash::{messages::MessageLevel, tree::Item, unit::display::Mode};
@@ -28,12 +28,13 @@ pub struct WorkerConfig {
     pub name: String,
     pub tree: prodash::Tree,
     pub threads: usize,
-    pub diff: Option<usize>, // "Some" if difficulty is fixed, else automatic diff
-    pub profit_safe: bool,  // defaults True, will quit processs if a negative profit detected...
+
+    pub cli_opts: CmdOpts,
 }
 
 /// Represents a worker.
 pub struct Worker {
+    #[allow(dead_code)]
     send_stop: Sender<()>,
     _task: smol::Task<surf::Result<()>>,
 }
@@ -48,6 +49,7 @@ impl Worker {
         }
     }
 
+    #[allow(dead_code)]
     /// Waits for the worker to complete the current iteration, then stops it.
     pub async fn wait(self) -> surf::Result<()> {
         self.send_stop.send(()).await?;
@@ -58,6 +60,8 @@ impl Worker {
 async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result<()> {
     let tree = opts.tree.clone();
     repeat_fallible(|| async {
+        let cli_opts = opts.cli_opts.clone();
+
         let worker = tree.add_child("worker");
         let worker = Arc::new(Mutex::new(worker));
         let my_speed = compute_speed().await;
@@ -65,10 +69,12 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let client = get_valclient(is_testnet, opts.connect).await?;
 
         let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
-        let quit_without_profit = opts.profit_safe;
+        let quit_without_profit = ! cli_opts.disable_profit_failsafe;
+        let max_losts = if let Some(v) = cli_opts.balance_max_losts { Some(v.parse().unwrap()) } else { None };
 
         loop {
-            mint_state.recording_balance().await.unwrap();
+            // check profit status, and/or quitting without incomes
+            mint_state.fee_failsafe(max_losts, quit_without_profit);
 
             // turn off gracefully
             if recv_stop.try_recv().is_ok() {
@@ -132,16 +138,11 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .await?;
                 let h = opts.wallet.send_tx(to_send).await?;
                 opts.wallet.wait_transaction(h).await?;
-
-                mint_state.reset_balances();
             }
-
-            // check profit status, and/or quitting without incomes
-            mint_state.balance_failsafe(quit_without_profit);
 
             let my_difficulty = {
                 let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
-                match opts.diff {
+                match cli_opts.fixed_diff {
                     None => { auto },
                     Some(diff) => { diff }
                 }
@@ -152,7 +153,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 format!(
                     "Selected difficulty {}: {} (approx. {:?} / tx)",
 
-                    if let Some(_) = opts.diff { "[fixed]" } else { "[auto]" },
+                    if let Some(_) = cli_opts.fixed_diff { "[fixed]" } else { "[auto]" },
                     my_difficulty,
                     approx_iter,
                 ),
@@ -395,7 +396,7 @@ async fn compute_speed() -> f64 {
         smol::unblock(move || melpow::Proof::generate(&[], difficulty, Tip910MelPowHash)).await;
         let elapsed = start.elapsed();
         let speed = 2.0f64.powi(difficulty as _) / elapsed.as_secs_f64();
-        if elapsed.as_secs_f64() > 0.5 {
+        if elapsed.as_secs() >= 1 {
             return speed;
         }
     }

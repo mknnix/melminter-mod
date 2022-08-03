@@ -18,8 +18,17 @@ pub struct MintState {
     wallet: WalletClient,
     client: ValClient,
 
-    // store the history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
-    balance_history: Vec<(SystemTime, CoinValue)>,
+    // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
+    fee_history: Vec<FeeRecord>,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct FeeRecord {
+    f: u8, // F1/F2/F3... first for newcoin; second for doscMint; three for swap.
+    time: SystemTime,
+    balance: CoinValue,
+    fee: CoinValue,
+    income: CoinValue, // ERG(should be convert and store MEL) for doscMint, or MEL for swap. any newcoin tx should be always 0.
 }
 
 #[derive(Serialize, Deserialize)]
@@ -30,58 +39,35 @@ struct PrepareReq {
 
 impl MintState {
     pub fn new(wallet: WalletClient, client: ValClient) -> Self {
-        Self { wallet, client, balance_history: vec![] }
+        Self { wallet, client, fee_history: vec![] }
     }
 
-    pub async fn recording_balance(&mut self) -> surf::Result<CoinValue> {
-        let amount = self.wallet.summary().await?
-            .detailed_balance.get("6d")
-            .copied().unwrap_or(CoinValue(0));
-
-        let mut found = false;
-        for (_, it) in &self.balance_history {
-            if it == &amount {
-                found = true;
-                break;
-            }
-        }
-
-        if ! found {
-            let now = SystemTime::now();
-            self.balance_history.push((now, amount));
-        }
-
-        Ok(amount)
-    }
-
-    pub fn reset_balances(&mut self) {
-        // this should be called only on happen 0.5 profit transaction, or other non-minting balance changes
-        self.balance_history = vec![];
+    pub async fn get_balance(&self) -> surf::Result<CoinValue> {
+        Ok( self.wallet.summary().await?.detailed_balance.get("6d").copied().unwrap_or(CoinValue(0)) )
     }
 
     #[allow(non_snake_case)]
-    pub fn balance_failsafe(&self, quit: bool) {
-        // 0.02 MEL as the max costs for minting...
-        let MAX_LOST = CoinValue::from_millions(1u8) / 50;
-        //let MAX_LOST = CoinValue(1000); // debug...
+    pub fn fee_failsafe(&self, max: Option<CoinValue>, quit: bool) {
+        // 0.02 MEL as the default max costs for minting...
+        let MAX_LOST = if let Some(ml) = max { ml } else { CoinValue::from_millions(1u8) / 50 };
 
-        let bal = self.balance_history.clone();
-        eprintln!("(debug) our balance history: {:?}", bal);
+        let fh = self.fee_history.clone();
+        eprintln!("(debug) our balance history: {:?}", fh);
 
-        let bal_len = bal.len();
-        if bal_len < 2 {
+        let fh_len = fh.len();
+        if fh_len < 2 {
             return;
         }
 
         let mut lost_coins = CoinValue(0);
-        for i in 0..bal_len {
-            let (curr_time, curr_coins) = bal[i];
-            if i <= 0 { continue; }
-            let (prev_time, prev_coins) = bal[i-1];
+        for it in &fh {
+            assert!(it.time < SystemTime::now());
+            assert!(it.f >= 1 && it.f <= 3);
 
-            assert!(prev_time < curr_time);
+            // skip any newcoin tx(s)
+            if it.f == 1 { continue; }
 
-            let profits: i128 = (curr_coins.0 as i128) - (prev_coins.0 as i128);
+            let profits: i128 = (it.income.0 as i128) - (it.fee.0 as i128);
             if profits == 0 { continue; }
 
             if profits < 0 {
@@ -97,9 +83,9 @@ impl MintState {
         }
 
         if lost_coins > CoinValue(0) {
-            let (first_time, first_coins) = bal[0];
-            let (now_time, now_coins) = bal[bal_len - 1];
-            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> now coins: {} (lost coins: - {})", now_time.duration_since(first_time).unwrap_or(Duration::new(0, 0)), first_coins, now_coins, first_coins-now_coins);
+            let first = fh[0];
+            let last = fh[fh_len - 1];
+            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time).unwrap_or(Duration::new(0, 0)), first.balance, last.balance, first.balance - last.balance);
         }
 
         if lost_coins >= MAX_LOST {
@@ -116,7 +102,7 @@ impl MintState {
     }
 
     /// Generates a list of "seed" coins.
-    pub async fn generate_seeds(&self, threads: usize) -> surf::Result<()> {
+    pub async fn generate_seeds(&mut self, threads: usize) -> surf::Result<()> {
         let my_address = self.wallet.summary().await?.address;
         loop {
             let toret = self.get_seeds_raw().await?;
@@ -142,7 +128,18 @@ impl MintState {
                     vec![],
                 )
                 .await?;
+
+            let fees = tx.fee;
+            self.fee_history.push(FeeRecord{
+                f: 1,
+                time: SystemTime::now(),
+                balance: self.get_balance().await?,
+                fee: fees,
+                income: CoinValue(0),
+            });
+
             let sent_hash = self.wallet.send_tx(tx).await?;
+            println!("(debug) sent newcoin tx with fee: {}", fees);
             self.wallet.wait_transaction(sent_hash).await?;
         }
     }
@@ -217,7 +214,7 @@ impl MintState {
 
     /// Sends a transaction.
     pub async fn send_mint_transaction(
-        &self,
+        &mut self,
         seed: CoinID,
         difficulty: usize,
         proof: Vec<u8>,
@@ -241,7 +238,23 @@ impl MintState {
                 vec![Denom::Erg],
             )
             .await?;
+
+        let fees = tx.fee;
+        let mels = self.erg_to_mel(ergs).await?;
+        if fees >= mels {
+            println!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", tx.fee, mels);
+        }
+
+        self.fee_history.push(FeeRecord{
+            f: 2,
+            time: SystemTime::now(),
+            balance: self.get_balance().await?,
+            fee: fees,
+            income: mels,
+        });
+
         let txhash = self.wallet.send_tx(tx).await?;
+        println!("(debug) sent DoscMint tx with fee: {}", fees);
         Ok(txhash)
     }
 
@@ -264,7 +277,7 @@ impl MintState {
     // }
 
     /// Converts a given number of doscs to mel.
-    pub async fn convert_doscs(&self, doscs: CoinValue) -> surf::Result<()> {
+    pub async fn convert_doscs(&mut self, doscs: CoinValue) -> surf::Result<()> {
         let my_address = self.wallet.summary().await?.address;
         let tx = self
             .wallet
@@ -283,11 +296,27 @@ impl MintState {
             )
             .await?;
 
+        let fees = tx.fee;
+        let mels = self.erg_to_mel(doscs).await?;
+        if fees >= mels {
+            println!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", tx.fee, mels);
+        }
+
+        self.fee_history.push(FeeRecord{
+            f: 3,
+            time: SystemTime::now(),
+            balance: self.get_balance().await?,
+            fee: fees,
+            income: mels,
+        });
+
         let txhash = self.wallet.send_tx(tx).await?;
+        println!("(debug) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.wallet.wait_transaction(txhash).await?;
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Converts ERG to MEL
     pub async fn erg_to_mel(&self, ergs: CoinValue) -> surf::Result<CoinValue> {
         let mut pool = self
