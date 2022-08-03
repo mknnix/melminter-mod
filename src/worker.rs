@@ -396,7 +396,7 @@ async fn compute_speed() -> f64 {
         smol::unblock(move || melpow::Proof::generate(&[], difficulty, Tip910MelPowHash)).await;
         let elapsed = start.elapsed();
         let speed = 2.0f64.powi(difficulty as _) / elapsed.as_secs_f64();
-        if elapsed.as_secs() >= 1 {
+        if elapsed.as_secs_f64() > 0.5 {
             return speed;
         }
     }
