@@ -52,7 +52,7 @@ impl MintState {
         let MAX_LOST = if let Some(ml) = max { ml } else { CoinValue::from_millions(1u8) / 50 };
 
         let fh = self.fee_history.clone();
-        eprintln!("(debug) our balance history: {:?}", fh);
+        //eprintln!("(debug) our balance history: {:?}", fh);
 
         let fh_len = fh.len();
         if fh_len < 2 {
@@ -139,7 +139,7 @@ impl MintState {
             });
 
             let sent_hash = self.wallet.send_tx(tx).await?;
-            println!("(debug) sent newcoin tx with fee: {}", fees);
+            //println!("(debug) sent newcoin tx with fee: {}", fees);
             self.wallet.wait_transaction(sent_hash).await?;
         }
     }
@@ -254,7 +254,7 @@ impl MintState {
         });
 
         let txhash = self.wallet.send_tx(tx).await?;
-        println!("(debug) sent DoscMint tx with fee: {}", fees);
+        //println!("(debug) sent DoscMint tx with fee: {}", fees);
         Ok(txhash)
     }
 
@@ -311,7 +311,7 @@ impl MintState {
         });
 
         let txhash = self.wallet.send_tx(tx).await?;
-        println!("(debug) sent ERG-to-MEL swap tx with fee: {}", fees);
+        //println!("(debug) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.wallet.wait_transaction(txhash).await?;
         Ok(())
     }

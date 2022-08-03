@@ -283,34 +283,44 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 };
 
                 async move {
-                    let res = mint_state
-                        .mint_batch(
-                            my_difficulty,
-                            move |a, b| {
-                                let mut subworker = subworkers.entry(a).or_insert_with(|| {
-                                    let mut child = worker
-                                        .lock()
-                                        .unwrap()
-                                        .add_child(format!("subworker {}", a));
-                                    child.init(
-                                        Some(total),
-                                        Some(prodash::unit::dynamic_and_mode(
-                                            "kH",
-                                            Mode::with_throughput(),
-                                        )),
-                                    );
-                                    child
-                                });
-                                subworker.set(((total as f64) * b) as usize);
-                            },
-                            threads,
-                        )
-                        .await?;
+                    let started = Instant::now();
+
+                    let res = mint_state.mint_batch(
+                        my_difficulty,
+                        move |a, b| {
+                            let mut subworker = subworkers.entry(a).or_insert_with(|| {
+                                let mut child = worker
+                                    .lock()
+                                    .unwrap()
+                                    .add_child(format!("subworker {}", a));
+                                child.init(
+                                    Some(total),
+                                    Some(prodash::unit::dynamic_and_mode(
+                                        "kH",
+                                        Mode::with_throughput(),
+                                    )),
+                                );
+                                child
+                            });
+                            subworker.set(((total as f64) * b) as usize);
+                        },
+                        threads,
+                    ).await?;
+
+                    let ended = started.elapsed();
+                    println!("completed {} hashes in {:?} | offset: (expecting){:?} - (real){:?} = {};",
+                        total * threads,
+                        ended,
+                        approx_iter,
+                        ended,
+                        approx_iter.as_secs_f64() - ended.as_secs_f64()
+                    );
+
                     drop(speed_task);
                     Ok::<_, surf::Error>(res)
                 }
-            })
-            .await;
+            }).await;
+
             worker.lock().unwrap().message(
                 MessageLevel::Info,
                 format!("built batch of {} future proofs", batch.len()),
@@ -326,35 +336,30 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     sub.inc();
                     let reward_attempt = async {
                         // Retry until we don't see insufficient funds
+                        let mut errs = 0;
                         let reward_ergs = loop {
                             let snap = client.snapshot().await?;
-                            let reward_speed = 2u128.pow(my_difficulty as u32)
-                                / (snap.current_header().height.0 + 40 - data.height.0) as u128;
-                            let reward = themelio_stf::calculate_reward(
-                                reward_speed * 100,
-                                snap.current_header().dosc_speed,
-                                my_difficulty as u32,
-                                true
-                            );
-                            let reward_ergs =
-                                themelio_stf::dosc_to_erg(snap.current_header().height, reward);
-                            match mint_state
-                                .send_mint_transaction(
-                                    coin,
-                                    my_difficulty,
-                                    proof.clone(),
-                                    reward_ergs.into(),
-                                )
-                                .await
-                            {
+                            let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
+                            let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
+                            let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
+                            match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
                                 Err(err) => {
+                                    errs += 1;
+
                                     if err.to_string().contains("preparation") || err.to_string().contains("timeout") {
                                         let mut sub = sub.add_child("waiting for available coins");
                                         sub.init(None, None);
                                         smol::Timer::after(Duration::from_secs(10)).await;
                                     } else {
-                                        anyhow::bail!(err)
+                                        println!("{:?}", err);
                                     }
+
+                                    if errs >= 10 {
+                                        anyhow::bail!(err);
+                                    }
+
+                                    smol::Timer::after(Duration::from_secs(1)).await;
+                                    continue;
                                 }
                                 Ok(res) => {
                                     to_wait.push(res);
