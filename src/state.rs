@@ -242,7 +242,7 @@ impl MintState {
         let fees = tx.fee;
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
-            println!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", tx.fee, mels);
+            println!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
         }
 
         self.fee_history.push(FeeRecord{
@@ -299,7 +299,7 @@ impl MintState {
         let fees = tx.fee;
         let mels = self.erg_to_mel(doscs).await?;
         if fees >= mels {
-            println!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", tx.fee, mels);
+            println!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
         }
 
         self.fee_history.push(FeeRecord{
