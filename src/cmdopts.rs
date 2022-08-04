@@ -7,7 +7,7 @@ use themelio_structs::Address;
 #[derive(Debug, StructOpt, Clone)]
 pub struct CmdOpts {
     #[structopt(long)]
-    /// Wallet API endpoint. For example localhost:11773
+    /// Wallet API endpoint. For example 127.0.0.1:11773
     pub daemon: Option<SocketAddr>,
 
     #[structopt(long, default_value = "__melminter_")]
@@ -16,7 +16,8 @@ pub struct CmdOpts {
 
     #[structopt(long)]
     /// Payout address for melminter profits.
-    pub payout: Address,
+    /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL. otherwise will do nothing if you doesn't specify one.
+    pub payout: Option<Address>,
 
     #[structopt(long)]
     /// Whether to use testnet
@@ -43,7 +44,10 @@ pub struct CmdOpts {
     pub debug: bool,
 
     #[structopt(long)]
-    /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one. (PLEASE NOTE: this value should be chosen carefully! if you enter a too small value, your incomes may not be cover the expenses, because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
+    /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one.
+    /// (PLEASE NOTE: this value should be chosen carefully!
+    /// if you enter a too small value, your incomes may not be cover the expenses,
+    /// because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
     pub fixed_diff: Option<usize>,
 
     // #[structopt(long)]

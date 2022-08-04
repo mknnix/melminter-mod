@@ -94,15 +94,24 @@ fn main() -> surf::Result<()> {
                 let mut evt = dash_root.add_child(format!("creating new wallet {}", wallet_name));
                 evt.init(None, None);
                 log::info!("creating new wallet");
-                daemon
-                    .create_wallet(&wallet_name, opts.testnet, None, None)
-                    .await?;
-                daemon
-                    .get_wallet(&wallet_name)
-                    .await?
-                    .context("just-created wallet failed?!")?
+                daemon.create_wallet(&wallet_name, opts.testnet, None, None).await?;
+                daemon.get_wallet(&wallet_name).await?.context("just-created wallet gone?!")?
             }
         };
+
+        if let None = opts.payout {
+            let wallet_sk = {
+                if let Ok(sk) = worker_wallet.export_sk(None).await {
+                    sk
+                } else {
+                    worker_wallet.export_sk(Some("".to_string())).await?
+                }
+            };
+            log::warn!("You does not specify a payout address for receive your minted coins! no problem because the balance safety stored in the mint wallet.");
+            log::warn!("You can import mint wallet by using secret-key {}", wallet_sk);
+            log::warn!("Please provide a payout if you want automatic get your incomes, or importing this working-wallet if you want to manual manage it.");
+            std::mem::drop(wallet_sk);
+        }
 
         // make sure the working-wallet has enough money (for paying fees)
         while worker_wallet

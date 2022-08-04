@@ -23,7 +23,7 @@ use themelio_structs::{
 #[derive(Clone, Debug)]
 pub struct WorkerConfig {
     pub wallet: WalletClient,
-    pub payout: Address,
+    pub payout: Option<Address>,
     pub connect: SocketAddr,
     pub name: String,
     pub tree: prodash::Tree,
@@ -104,40 +104,41 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 mint_state.convert_doscs(our_ergs).await?;
             }
 
-            // If we have more than 1 MEL, transfer 0.5 MEL to the backup wallet.
-            let our_mels = opts
-                .wallet
-                .summary()
-                .await?
-                .detailed_balance
-                .get("6d")
-                .copied()
-                .unwrap_or_default();
-            if our_mels > CoinValue::from_millions(1u8) {
-                let to_convert = our_mels / 2;
-                worker.lock().unwrap().info(format!(
-                    "transferring {} MEL of profits to backup wallet",
-                    our_mels
-                ));
-
-                let to_send = opts
+            // skipping transfer profits if no provide payout address.
+            if let Some(payout) = opts.payout {
+                // If we have more than 1 MEL, transfer [half balance] to the backup wallet.
+                let our_mels = opts
                     .wallet
-                    .prepare_transaction(
-                        TxKind::Normal,
-                        vec![],
-                        vec![CoinData {
-                            covhash: opts.payout,
-                            value: to_convert,
-                            additional_data: vec![],
-                            denom: Denom::Mel,
-                        }],
-                        vec![],
-                        vec![],
-                        vec![],
-                    )
-                    .await?;
-                let h = opts.wallet.send_tx(to_send).await?;
-                opts.wallet.wait_transaction(h).await?;
+                    .summary()
+                    .await?
+                    .detailed_balance
+                    .get("6d")
+                    .copied()
+                    .unwrap_or_default();
+                if our_mels > CoinValue::from_millions(1u8) {
+                    let to_transfer = our_mels / 2;
+                    worker.lock().unwrap().info(format!("balance of working-wallet: {} | profits have more than 1.0 MEL, transferring half to payout address...", our_mels));
+
+                    let to_send = opts
+                        .wallet
+                        .prepare_transaction(
+                            TxKind::Normal,
+                            vec![],
+                            vec![CoinData {
+                                covhash: payout,
+                                value: to_transfer,
+                                additional_data: vec![],
+                                denom: Denom::Mel,
+                            }],
+                            vec![],
+                            vec![],
+                            vec![],
+                        )
+                        .await?;
+                    let h = opts.wallet.send_tx(to_send).await?;
+                    worker.lock().unwrap().info( format!("sent {} MEL to payout wallet. tx hash: {}", to_transfer, h) );
+                    opts.wallet.wait_transaction(h).await?;
+                }
             }
 
             let my_difficulty = {
@@ -314,7 +315,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         approx_iter.as_secs_f64() - ended.as_secs_f64(), // used for allow negatives, not a sic...
                     );
 
-                    drop(speed_task);
+                    std::mem::drop(speed_task);
                     Ok::<_, surf::Error>(res)
                 }
             }).await;
