@@ -198,8 +198,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                         let total_sum = (total * threads) as f64;
 
-                        let eprint_timeout = 600; // ten minutes (unit: seconds)
-                        let mut eprint_started: Option<Instant> = None;
+                        let disconnect_timeout = Duration::from_secs(600); // ten minutes
+                        let mut disconnect_started: Option<Instant> = None;
 
                         loop {
                             smol::Timer::after(Duration::from_secs(1)).await;
@@ -230,19 +230,17 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                             let summary = match wallet.summary().await {
                                 Ok(s) => {
-                                    if let Some(_) = eprint_started {
-                                        // clear the before error message...
-                                        eprint!("{}", " ".repeat(70));
-                                        eprint_started = None;
+                                    if let Some(_) = disconnect_started {
+                                        disconnect_started = None;
                                     }
 
                                     s
                                 },
                                 Err(e) => {
-                                    if let None = eprint_started {
+                                    if let None = disconnect_started {
                                         log::error!("Failed to get wallet summary: {:?}", e);
-                                        log::warn!("Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered. For save your computing resources, the program will exit if disconnected a long time (timeout is {}s)", eprint_timeout);
-                                        eprint_started = Some(Instant::now());
+                                        log::warn!("Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered. For save your CPU computing resources, the program will exit if disconnected a long time (timeout is {:?})", disconnect_timeout);
+                                        disconnect_started = Some(Instant::now());
                                     }
 
                                     {
@@ -253,8 +251,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                     }
 
                                     // this check is mainly to prevent un-necessary CPU-time waste.
-                                    if eprint_started.unwrap().elapsed().as_secs() > eprint_timeout {
-                                        log::error!("the daemon connection recovery failed because timeout-ed! ({}s)", eprint_timeout);
+                                    if disconnect_started.unwrap().elapsed() > disconnect_timeout {
+                                        log::error!("the daemon connection recovery failed because timeout-ed! ({:?})", disconnect_timeout);
 
                                         let orig_hook = std::panic::take_hook();
                                         std::panic::set_hook(Box::new(move |panic_info| {
@@ -307,12 +305,13 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     ).await?;
 
                     let ended = started.elapsed();
-                    println!("completed {} hashes in {:?} | offset: (expecting){:?} - (real){:?} = {};",
-                        total * threads,
-                        ended,
+                    println!("Proof Completed {} kH (total {} threads) in time {:?} | offset: (approx){:?} - (real){:?} = {}",
+                        total * threads, threads, ended,
+
+                        // calculating deviation for improve the accuracy of predicted time spent...
                         approx_iter,
                         ended,
-                        approx_iter.as_secs_f64() - ended.as_secs_f64()
+                        approx_iter.as_secs_f64() - ended.as_secs_f64(), // used for allow negatives, not a sic...
                     );
 
                     drop(speed_task);
@@ -326,15 +325,15 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             );
 
             // Time to submit the proofs. For every proof in the batch, we attempt to submit it. If the submission fails, we move on, because there might be some weird race condition with melwalletd going on.
-            // We also attempt to submit transactions in parallel. This is done by retrying *only* on insufficient funds.
-            let mut to_wait = vec![];
+            // We also attempt to submit transactions in parallel. This is done by retrying always (with max count 10).
+            let mut waits = vec![];
             {
                 let mut sub = worker.lock().unwrap().add_child("submitting proof");
                 sub.init(Some(batch.len()), None);
                 for (coin, data, proof) in batch {
                     sub.inc();
                     let reward_attempt = async {
-                        // Retry until we don't see insufficient funds
+                        // Retry until we can submit proof or reach max limit...
                         let mut errs = 0;
                         let reward_ergs = loop {
                             let snap = client.snapshot().await?;
@@ -350,7 +349,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                         sub.init(None, None);
                                         smol::Timer::after(Duration::from_secs(10)).await;
                                     } else {
-                                        println!("{:?}", err);
+                                        log::error!("{:?}", err);
                                     }
 
                                     if errs >= 10 {
@@ -361,7 +360,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                     continue;
                                 }
                                 Ok(res) => {
-                                    to_wait.push(res);
+                                    waits.push(res);
                                     break reward_ergs;
                                 }
                             }
@@ -371,10 +370,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     }
                     .await;
                     if let Err(err) = reward_attempt {
-                        sub.info(format!(
-                            "FAILED a proof submission for some reason : {:?}",
-                            err
-                        ));
+                        log::error!("FAILED a proof submission for some reason : {:?}", err);
                     }
                 }
             }
@@ -382,8 +378,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 .lock()
                 .unwrap()
                 .add_child("waiting for confirmation of proof");
-            sub.init(Some(to_wait.len()), None);
-            for to_wait in to_wait {
+            sub.init(Some(waits.len()), None);
+            for to_wait in waits {
                 sub.inc();
                 opts.wallet.wait_transaction(to_wait).await?;
             }

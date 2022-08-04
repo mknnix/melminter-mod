@@ -87,7 +87,7 @@ impl MintState {
         if lost_coins > CoinValue(0) {
             let first = fh[0];
             let last = fh[fh_len - 1];
-            println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time).unwrap_or(Duration::new(0, 0)), first.balance, last.balance, first.balance - last.balance);
+            log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time).unwrap_or(Duration::new(0, 0)), first.balance, last.balance, first.balance - last.balance);
         }
 
         if lost_coins >= max_lost {
@@ -257,7 +257,7 @@ impl MintState {
         let fees = tx.fee;
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
-            println!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
+            log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
         }
 
         self.fee_history.push(FeeRecord{
@@ -316,7 +316,7 @@ impl MintState {
         let fees = tx.fee;
         let mels = self.erg_to_mel(doscs).await?;
         if fees >= mels {
-            println!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
+            log::warn!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a melnet issue.", fees, mels);
         }
 
         self.fee_history.push(FeeRecord{
