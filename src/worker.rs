@@ -198,7 +198,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                         let total_sum = (total * threads) as f64;
 
-                        let eprint_timeout = 600; // unit: seconds
+                        let eprint_timeout = 600; // ten minutes (unit: seconds)
                         let mut eprint_started: Option<Instant> = None;
 
                         loop {
@@ -231,7 +231,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             let summary = match wallet.summary().await {
                                 Ok(s) => {
                                     if let Some(_) = eprint_started {
-                                        // clear the brfore error message...
+                                        // clear the before error message...
                                         eprint!("{}", " ".repeat(70));
                                         eprint_started = None;
                                     }
@@ -239,29 +239,28 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                     s
                                 },
                                 Err(e) => {
-                                    eprint!("  [ERR] Failed to get wallet summary: {:?}", e);
-
                                     if let None = eprint_started {
+                                        log::error!("Failed to get wallet summary: {:?}", e);
+                                        log::warn!("Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered. For save your computing resources, the program will exit if disconnected a long time (timeout is {}s)", eprint_timeout);
                                         eprint_started = Some(Instant::now());
                                     }
 
                                     {
-                                        // display warning message...
-                                        let mut new = worker.lock().unwrap().add_child(format!("[WARNING] Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered."));
+                                        // display error info.
+                                        let mut new = worker.lock().unwrap().add_child(format!("Failed to connect daemon: {:?}", e));
                                         new.init(None, None);
                                         _space = Some(new);
                                     }
 
                                     // this check is mainly to prevent un-necessary CPU-time waste.
                                     if eprint_started.unwrap().elapsed().as_secs() > eprint_timeout {
-                                        println!("[ERROR] the daemon connection recovery failed because timeout-ed! ({}s)", eprint_timeout);
+                                        log::error!("the daemon connection recovery failed because timeout-ed! ({}s)", eprint_timeout);
 
                                         let orig_hook = std::panic::take_hook();
                                         std::panic::set_hook(Box::new(move |panic_info| {
                                             orig_hook(panic_info);
                                             std::process::exit(90);
                                         }));
-
                                         panic!("because still does not recovery the daemon connection, so exit minting to avoid waste the CPU computing resources.");
                                     }
 

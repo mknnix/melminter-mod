@@ -49,10 +49,12 @@ impl MintState {
     #[allow(non_snake_case)]
     pub fn fee_failsafe(&self, max: Option<CoinValue>, quit: bool) {
         // 0.02 MEL as the default max costs for minting...
-        let MAX_LOST = if let Some(ml) = max { ml } else { CoinValue::from_millions(1u8) / 50 };
+        let MAX_LOST = CoinValue::from_millions(1u8) / 50;
+        // override if given custom value.
+        let max_lost = if let Some(ml) = max { ml } else { MAX_LOST };
 
         let fh = self.fee_history.clone();
-        //eprintln!("(debug) our balance history: {:?}", fh);
+        log::debug!("(fee-safe) our balance history: {:?}", fh);
 
         let fh_len = fh.len();
         if fh_len < 2 {
@@ -88,7 +90,7 @@ impl MintState {
             println!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time).unwrap_or(Duration::new(0, 0)), first.balance, last.balance, first.balance - last.balance);
         }
 
-        if lost_coins >= MAX_LOST {
+        if lost_coins >= max_lost {
             if quit {
                 let orig_hook = std::panic::take_hook();
                 std::panic::set_hook(Box::new(move |panic_info| {
@@ -96,13 +98,25 @@ impl MintState {
                     std::process::exit(91);
                 }));
 
-                panic!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, MAX_LOST);
+                panic!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, max_lost);
             }
         }
     }
 
+    /// unlock mint-wallet, first try plaintext, second try empty password if fails, final return error if still failed.
+    pub async fn unlock(&self) -> surf::Result<()> {
+        if self.wallet.summary().await?.locked {
+            if let Err(_) = self.wallet.unlock(None).await {
+                self.wallet.unlock(Some("".to_string())).await?;
+            }
+        }
+        Ok(())
+    }
+
     /// Generates a list of "seed" coins.
     pub async fn generate_seeds(&mut self, threads: usize) -> surf::Result<()> {
+        self.unlock().await?;
+
         let my_address = self.wallet.summary().await?.address;
         loop {
             let toret = self.get_seeds_raw().await?;
@@ -139,7 +153,7 @@ impl MintState {
             });
 
             let sent_hash = self.wallet.send_tx(tx).await?;
-            //println!("(debug) sent newcoin tx with fee: {}", fees);
+            log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.wallet.wait_transaction(sent_hash).await?;
         }
     }
@@ -220,7 +234,8 @@ impl MintState {
         proof: Vec<u8>,
         ergs: CoinValue,
     ) -> surf::Result<TxHash> {
-        self.wallet.unlock(None).await?;
+        self.unlock().await?;
+
         let own_cov = self.wallet.summary().await?.address;
         let tx = self
             .wallet
@@ -254,7 +269,7 @@ impl MintState {
         });
 
         let txhash = self.wallet.send_tx(tx).await?;
-        //println!("(debug) sent DoscMint tx with fee: {}", fees);
+        log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
         Ok(txhash)
     }
 
@@ -278,6 +293,8 @@ impl MintState {
 
     /// Converts a given number of doscs to mel.
     pub async fn convert_doscs(&mut self, doscs: CoinValue) -> surf::Result<()> {
+        self.unlock().await?;
+
         let my_address = self.wallet.summary().await?.address;
         let tx = self
             .wallet
@@ -311,7 +328,7 @@ impl MintState {
         });
 
         let txhash = self.wallet.send_tx(tx).await?;
-        //println!("(debug) sent ERG-to-MEL swap tx with fee: {}", fees);
+        log::debug!("(fee-safe) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.wallet.wait_transaction(txhash).await?;
         Ok(())
     }

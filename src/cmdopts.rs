@@ -39,6 +39,10 @@ pub struct CmdOpts {
     pub balance_max_losts: Option<String>,
 
     #[structopt(long)]
+    /// enable debug output (default: disabled)
+    pub debug: bool,
+
+    #[structopt(long)]
     /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one. (PLEASE NOTE: this value should be chosen carefully! if you enter a too small value, your incomes may not be cover the expenses, because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
     pub fixed_diff: Option<usize>,
 
