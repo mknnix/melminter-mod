@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -80,7 +80,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
             // turn off gracefully
             if recv_stop.try_recv().is_ok() {
-                return Ok::<_, surf::Error>(());
+                std::process::exit(0);
+                return Ok::<_, surf::Error>(()); // of course unreachable but not a mistake, try comment this then your compiler will doesn't work...
+                                                                                            // (cannot infer type for type parameter `T` declared on the function `repeat_fallible`)
             }
 
             let snapshot = client.snapshot().await?;
@@ -326,52 +328,44 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             // We also attempt to submit transactions in parallel. This is done by retrying always (with max count 10).
             let mut waits = vec![];
             {
-                let mut sub = worker.lock().unwrap().add_child("submitting proof");
-                sub.init(Some(batch.len()), None);
+                // a retry queue for submit proofs
+                let mut submits = VecDeque::new();
                 for (coin, data, proof) in batch {
-                    sub.inc();
-                    let reward_attempt = async {
-                        // Retry until we can submit proof or reach max limit...
-                        let mut errs = 0;
-                        let reward_ergs = loop {
-                            let snap = client.snapshot().await?;
-                            let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
-                            let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
-                            let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
-                            match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
-                                Err(err) => {
-                                    errs += 1;
+                    submits.push_back((coin, data, proof));
+                }
+                let txs = submits.len();
 
-                                    if err.to_string().contains("preparation") || err.to_string().contains("timeout") {
-                                        let mut sub = sub.add_child("waiting for available coins");
-                                        sub.init(None, None);
-                                        smol::Timer::after(Duration::from_secs(10)).await;
-                                    } else {
-                                        log::error!("{:?}", err);
-                                    }
+                let mut sub = worker.lock().unwrap().add_child("submitting proof");
+                sub.init(Some(txs), None);
 
-                                    if errs >= 10 {
-                                        anyhow::bail!(err);
-                                    }
+                let mut lefts = txs * 10;
+                while submits.len() > 0 {
+                    let (coin, data, proof) = submits.pop_front().unwrap();
 
-                                    smol::Timer::after(Duration::from_secs(1)).await;
-                                    continue;
-                                }
-                                Ok(res) => {
-                                    waits.push(res);
-                                    break reward_ergs;
-                                }
+                    let snap = client.snapshot().await?;
+                    let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
+                    let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
+                    let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
+                    match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
+                        Err(err) => {
+                            log::error!("FAILED a proof submission for some reason: {:?}", err);
+                            if lefts > 0 {
+                                lefts -= 1;
+                                submits.push_back((coin, data, proof));
                             }
-                        };
-                        sub.info(format!("minted {} ERG", CoinValue(reward_ergs)));
-                        Ok::<_, anyhow::Error>(())
-                    }
-                    .await;
-                    if let Err(err) = reward_attempt {
-                        log::error!("FAILED a proof submission for some reason : {:?}", err);
+                        },
+                        Ok(res) => {
+                            waits.push(res);
+
+                            sub.inc(); sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
+                        }
                     }
                 }
+
+                // make sure all proofs sent.
+                //assert_eq!(waits.len(), txs);
             }
+
             let mut sub = worker
                 .lock()
                 .unwrap()

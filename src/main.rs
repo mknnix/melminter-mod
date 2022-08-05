@@ -147,8 +147,14 @@ fn main() -> surf::Result<()> {
         });
 
         // allow users to request program "safety exit" (avoid quitting after new-coin transaction, it cause more low-profit proofs)
+        let mut worker_stopping = false;
         ctrlc::set_handler(move || {
-            log::warn!("Received Ctrl+C key, the program will stopping mint as soon as possible... scheduled to stop after the DoscMint transactions sent, or you can terminate this process if you wish.");
+            if worker_stopping {
+                panic_exit!(1, "Press Ctrl+C key again? now process exiting...");
+            }
+
+            worker_stopping = true;
+            log::warn!("Received Ctrl+C key, the program will stopping mint as soon as possible... scheduled to stop after the DoscMint transactions sent, or you can exit immediately (by press again) if you wish.");
             smol::block_on(worker.stop()).unwrap();
         }).unwrap();
 
