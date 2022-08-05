@@ -338,7 +338,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 let mut sub = worker.lock().unwrap().add_child("submitting proof");
                 sub.init(Some(txs), None);
 
-                let mut lefts = txs * 10;
+                let mut retry_lefts = txs * 10; // retry limit
                 while submits.len() > 0 {
                     let (coin, data, proof) = submits.pop_front().unwrap();
 
@@ -346,24 +346,40 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
                     let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
                     let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
+
                     match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
                         Err(err) => {
                             log::error!("FAILED a proof submission for some reason: {:?}", err);
-                            if lefts > 0 {
-                                lefts -= 1;
+
+                            if err.to_string().contains("preparation") || err.to_string().contains("timeout") {
+                                retry_lefts += 1; // make sure try again
+                                let mut sub = sub.add_child("waiting for available coins");
+                                sub.init(None, None);
+                                smol::Timer::after(Duration::from_secs(10)).await;
+                            }
+
+                            if retry_lefts > 0 {
+                                retry_lefts -= 1;
                                 submits.push_back((coin, data, proof));
+                            } else {
+                                log::warn!("dropping proof {:?} because reach max retry limit", (coin, data, proof));
                             }
                         },
                         Ok(res) => {
                             waits.push(res);
 
-                            sub.inc(); sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
+                            sub.inc();
+                            sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
                         }
                     }
+
+                    smol::Timer::after(Duration::from_secs(1)).await;
                 }
 
-                // make sure all proofs sent.
-                //assert_eq!(waits.len(), txs);
+                assert!(waits.len() <= txs);
+                if waits.len() != txs {
+                    log::error!("failed to submit {} proofs", txs - waits.len());
+                }
             }
 
             let mut sub = worker
