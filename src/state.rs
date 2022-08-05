@@ -11,7 +11,7 @@ use themelio_structs::{
     CoinData, CoinDataHeight, CoinID, CoinValue, Denom, PoolKey, TxHash, TxKind,
 };
 
-use crate::repeat_fallible;
+use crate::{repeat_fallible, panic_exit};
 
 #[derive(Clone)]
 pub struct MintState {
@@ -92,13 +92,7 @@ impl MintState {
 
         if lost_coins >= max_lost {
             if quit {
-                let orig_hook = std::panic::take_hook();
-                std::panic::set_hook(Box::new(move |panic_info| {
-                    orig_hook(panic_info);
-                    std::process::exit(91);
-                }));
-
-                panic!("Melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your balances!", lost_coins, max_lost);
+                panic_exit!(91, "melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your coins!", lost_coins, max_lost);
             }
         }
     }

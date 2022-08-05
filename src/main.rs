@@ -22,7 +22,7 @@ mod worker;
 // use smol::prelude::*;
 use crate::worker::{Worker, WorkerConfig};
 
-// get the version of this program itself (avoid use 'env!' because it will crashes if the program is compiled without cargo)
+// get the version of this program itself
 const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
 
 fn main() -> surf::Result<()> {
@@ -54,7 +54,7 @@ fn main() -> surf::Result<()> {
             addr
         } else {
             // start a daemon naw
-            let port = fastrand::usize(5000..15000);
+            let port = fastrand::usize(50000..65000); // avoid use 11773/11814 or any usual port
             let daemon = Command::new("melwalletd")
                 .arg("--listen")
                 .arg(format!("127.0.0.1:{}", port))
@@ -81,11 +81,10 @@ fn main() -> surf::Result<()> {
             NetID::Mainnet
         };
 
-        println!("MelMinter v{} / melwalletd at {}", VERSION.unwrap_or("(N/A)"), daemon_addr);
+        println!("melminter v{} / connect to melwalletd endpoint {}", VERSION.unwrap_or("(N/A)"), daemon_addr);
         println!("");
 
-        // workers
-        let mut workers = vec![];
+        // generate wallet name for minting
         let wallet_name = format!("{}{:?}", opts.wallet_prefix, network_id);
         // make sure the working-wallet exists
         let worker_wallet = match daemon.get_wallet(&wallet_name).await? {
@@ -100,20 +99,23 @@ fn main() -> surf::Result<()> {
         };
 
         if let None = opts.payout {
-            let wallet_sk = {
+            let wallet_sk = if opts.export_sk {
                 if let Ok(sk) = worker_wallet.export_sk(None).await {
                     sk
                 } else {
                     worker_wallet.export_sk(Some("".to_string())).await?
                 }
+            } else {
+                "(use '--export-sk' if you want)".to_string()
             };
-            log::warn!("You does not specify a payout address for receive your minted coins! no problem because the balance safety stored in the mint wallet.");
-            log::warn!("You can import mint wallet by using secret-key {}", wallet_sk);
-            log::warn!("Please provide a payout if you want automatic get your incomes, or importing this working-wallet if you want to manual manage it.");
+
+            log::warn!("You does not specify a payout address for receive your minted coins! but no problem because the balance safety stored in the mint wallet ({}).", &wallet_name);
+            log::warn!("You can import this mint wallet by using secret-key: {}", wallet_sk);
+            log::warn!("Please provide a payout if you want to get your incomes in your wallet, or importing this working-wallet if you want to manual manage it.");
             std::mem::drop(wallet_sk);
         }
 
-        // make sure the working-wallet has enough money (for paying fees)
+        // make sure the working-wallet has enough money
         while worker_wallet
             .summary()
             .await?
@@ -123,31 +125,58 @@ fn main() -> surf::Result<()> {
             .unwrap_or(CoinValue(0))
             < CoinValue::from_millions(1u64) / 20
         {
-            let _evt = dash_root
-                .add_child("The balance of melminter working wallet is less than 0.05! melminter requires a small amount of 'seed' MEL to start minting... (used by paying network fees)");
+            let _evt = dash_root.add_child("balance of melminter working wallet is less than 0.05 MEL! melminter requires a small amount of 'seed' MEL to start minting...");
             let _evt = dash_root.add_child(format!(
                 "Please send at least 0.1 MEL to {}",
                 worker_wallet.summary().await?.address
             ));
             smol::Timer::after(Duration::from_secs(1)).await;
 
-            if opts.skip_fee_check { break; }
+            if opts.skip_balance_check { break; }
         }
 
-        workers.push(Worker::start(WorkerConfig {
+        let worker = Worker::start(WorkerConfig {
             wallet: worker_wallet,
             payout: opts.payout,
             connect: themelio_bootstrap::bootstrap_routes(network_id)[0],
-            name: "".into(),
+            //name: "".into(),
             tree: dash_root.clone(),
             threads: opts.threads.unwrap_or_else(num_cpus::get_physical),
 
             cli_opts: opts.clone(),
-        }));
+        });
+
+        // allow users to request program "safety exit" (avoid quitting after new-coin transaction, it cause more low-profit proofs)
+        ctrlc::set_handler(move || {
+            log::warn!("Received Ctrl+C key, the program will stopping mint as soon as possible... scheduled to stop after the DoscMint transactions sent, or you can terminate this process if you wish.");
+            smol::block_on(worker.stop()).unwrap();
+        }).unwrap();
 
         smol::future::pending().await
     })
 }
+
+#[macro_export]
+macro_rules! panic_exit {
+    ($status:tt, $($arg:tt)*) => {
+        let orig_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            orig_hook(panic_info);
+            std::process::exit($status);
+        }));
+        panic!($($arg)*)
+    };
+}
+/*
+fn panic_exit(status: i32, text: &str) {
+    let orig_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        orig_hook(panic_info);
+        std::process::exit(status);
+    }));
+    panic!("{}", text)
+}
+*/
 
 // Repeats something until it stops failing
 async fn repeat_fallible<T, E: std::fmt::Debug, F: Future<Output = Result<T, E>>>(

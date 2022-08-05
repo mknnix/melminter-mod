@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{repeat_fallible, state::MintState, CmdOpts};
+use crate::{repeat_fallible, state::MintState, CmdOpts, panic_exit};
 use dashmap::{mapref::multiple::RefMulti, DashMap};
 use melwallet_client::WalletClient;
 use prodash::{messages::MessageLevel, tree::Item, unit::display::Mode};
@@ -25,7 +25,7 @@ pub struct WorkerConfig {
     pub wallet: WalletClient,
     pub payout: Option<Address>,
     pub connect: SocketAddr,
-    pub name: String,
+    //pub name: String,
     pub tree: prodash::Tree,
     pub threads: usize,
 
@@ -34,7 +34,6 @@ pub struct WorkerConfig {
 
 /// Represents a worker.
 pub struct Worker {
-    #[allow(dead_code)]
     send_stop: Sender<()>,
     _task: smol::Task<surf::Result<()>>,
 }
@@ -49,10 +48,13 @@ impl Worker {
         }
     }
 
-    #[allow(dead_code)]
-    /// Waits for the worker to complete the current iteration, then stops it.
-    pub async fn wait(self) -> surf::Result<()> {
+    /// Send a stop request to the worker
+    pub async fn stop(&self) -> anyhow::Result<()> {
         self.send_stop.send(()).await?;
+        Ok(())
+    }
+    /// Waits for the worker to complete the current iteration
+    pub async fn wait(self) -> surf::Result<()> {
         self._task.await
     }
 }
@@ -255,12 +257,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                     if disconnect_started.unwrap().elapsed() > disconnect_timeout {
                                         log::error!("the daemon connection recovery failed because timeout-ed! ({:?})", disconnect_timeout);
 
-                                        let orig_hook = std::panic::take_hook();
-                                        std::panic::set_hook(Box::new(move |panic_info| {
-                                            orig_hook(panic_info);
-                                            std::process::exit(90);
-                                        }));
-                                        panic!("because still does not recovery the daemon connection, so exit minting to avoid waste the CPU computing resources.");
+                                        panic_exit!(90, "because still does not recovery the daemon connection, so exit minting to avoid waste the CPU computing resources.");
                                     }
 
                                     // to retry...

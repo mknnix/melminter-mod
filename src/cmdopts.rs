@@ -16,7 +16,8 @@ pub struct CmdOpts {
 
     #[structopt(long)]
     /// Payout address for melminter profits.
-    /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL. otherwise will do nothing if you doesn't specify one.
+    /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL.
+    /// otherwise will do nothing and display warning if you doesn't specify one.
     pub payout: Option<Address>,
 
     #[structopt(long)]
@@ -28,23 +29,28 @@ pub struct CmdOpts {
     pub threads: Option<usize>,
 
     #[structopt(long)]
-    /// Is this program should be skipping the check that require balance is greater than or equal to 0.05
-    pub skip_fee_check: bool,
+    /// Whether melminter should be skipping the check that require balance >= 0.05 MEL
+    pub skip_balance_check: bool,
 
     #[structopt(long)]
-    /// Is the negative-profit failsafe check should be disabled? (PLEASE NOTE: use only for debugging!)
+    /// Whether the negative-profit failsafe check should be disabled? (use for debugging only)
     pub disable_profit_failsafe: bool,
 
     #[structopt(long)]
-    /// Manual specify a "max losts" value for balance safe, or defaults to 0.02 (unit: MEL, for example 0.0321)
+    /// Manual specify a "max lost" coins for balance safe, or defaults to 0.02 (unit: MEL, for example 0.0321)
     pub balance_max_losts: Option<String>,
 
     #[structopt(long)]
-    /// enable debug output (default: disabled)
+    /// Whether enable debug output
     pub debug: bool,
 
     #[structopt(long)]
-    /// If you want, you can specify a fixed difficulty here, otherwise this program will automatic to select one.
+    /// Whether exporting the secret key of mint wallet. (default: do nothing)
+    /// maybe only useful for without payout option
+    pub export_sk: bool,
+
+    #[structopt(long)]
+    /// Manual specify a fixed difficulty here, otherwise melminter will automatic to select one.
     /// (PLEASE NOTE: this value should be chosen carefully!
     /// if you enter a too small value, your incomes may not be cover the expenses,
     /// because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
