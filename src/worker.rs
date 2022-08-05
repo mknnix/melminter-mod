@@ -78,13 +78,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             // check profit status, and/or quitting without incomes
             mint_state.fee_failsafe(max_losts, quit_without_profit);
 
-            // turn off gracefully
-            if recv_stop.try_recv().is_ok() {
-                std::process::exit(0);
-                return Ok::<_, surf::Error>(()); // of course unreachable but not a mistake, try comment this then your compiler will doesn't work...
-                                                                                            // (cannot infer type for type parameter `T` declared on the function `repeat_fallible`)
-            }
-
             let snapshot = client.snapshot().await?;
             let erg_to_mel = snapshot
                 .get_pool(PoolKey::mel_and(Denom::Erg))
@@ -170,6 +163,11 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 "Max speed on chain: {:.2} kH/s",
                 fastest_speed / 1000.0
             ));
+
+            // if requested, stopping before generate seed
+            if recv_stop.try_recv().is_ok() {
+                std::process::exit(0);
+            }
 
             // generates some seeds
             {
@@ -311,7 +309,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         // calculating deviation for improve the accuracy of predicted time spent...
                         approx_iter,
                         ended,
-                        approx_iter.as_secs_f64() - ended.as_secs_f64(), // used for allow negatives, not a sic...
+                        approx_iter.as_secs_f64() - ended.as_secs_f64(), // f64 allow negative
                     );
 
                     std::mem::drop(speed_task);
@@ -392,6 +390,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 opts.wallet.wait_transaction(to_wait).await?;
             }
         }
+
+        return Ok::<_, surf::Error>(()); // this unreachable code used to infer generic types of function repeat_fallible
     })
     .await;
     Ok(())
