@@ -18,6 +18,9 @@ pub struct MintState {
     wallet: WalletClient,
     client: ValClient,
 
+    // expire time of each seeds, all expired coins will be ignored.
+    seed_ttl: Option<u64>,
+
     // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
     fee_history: Vec<FeeRecord>,
 }
@@ -39,7 +42,15 @@ struct PrepareReq {
 
 impl MintState {
     pub fn new(wallet: WalletClient, client: ValClient) -> Self {
-        Self { wallet, client, fee_history: vec![] }
+        // ttl = expire-time / block-interval (all units seconds)
+        let ttl = (3600*6) / 30;
+
+        Self {
+            wallet,
+            client,
+            seed_ttl: Some(ttl),
+            fee_history: vec![]
+        }
     }
 
     pub async fn get_balance(&self) -> surf::Result<CoinValue> {
@@ -154,18 +165,24 @@ impl MintState {
 
     async fn get_seeds_raw(&self) -> surf::Result<Vec<CoinID>> {
         let unspent_coins = self.wallet.get_coins().await?;
+        let current_height = self.client.snapshot().await?.current_header().height.0;
 
-        Ok(unspent_coins
-            .iter()
-            .filter_map(|(k, v)| {
-                if matches!(v.denom, Denom::Custom(_)) {
-                    Some((k, v))
-                } else {
-                    None
+        let mut seeds = vec![];
+        for (id, data) in unspent_coins {
+            if let Denom::Custom(_) = data.denom {
+                // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
+                if let Some(ttl) = self.seed_ttl {
+                    let coin_height = self.wallet.get_transaction_status(id.txhash).await?.confirmed_height.unwrap();
+                    assert!(coin_height <= current_height);
+                    if (current_height - coin_height) > ttl {
+                        continue;
+                    }
                 }
-            })
-            .map(|d| *d.0)
-            .collect())
+                seeds.push(id);
+            }
+        }
+
+        Ok(seeds)
     }
 
     /// Creates a partially-filled-in transaction, with the given difficulty, that's neither signed nor feed. The caller should fill in the DOSC output.
