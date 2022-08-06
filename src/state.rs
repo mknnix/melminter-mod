@@ -42,15 +42,32 @@ struct PrepareReq {
 
 impl MintState {
     pub fn new(wallet: WalletClient, client: ValClient) -> Self {
-        // ttl = expire-time / block-interval (all units seconds)
-        let ttl = (3600*6) / 30;
-
         Self {
             wallet,
             client,
-            seed_ttl: Some(ttl),
+            seed_ttl: None,
             fee_history: vec![]
         }
+    }
+
+    // caller provides Duration; method returns current TTL value.
+    pub fn set_seed_expire(&mut self, lifetime: Duration) -> u64 {
+        if let Some(blocks) = self.seed_ttl {
+            return blocks;
+        }
+
+        let min = 3600 * 2;
+        let max = 86400;
+
+        let mut secs = lifetime.as_secs();
+        if secs < min { secs = min; }
+        if secs > max { secs = max; }
+
+        // ttl-blocks = expire-time / block-interval (all time units seconds)
+        let blocks = secs / 30;
+
+        self.seed_ttl = Some(blocks);
+        return blocks;
     }
 
     pub async fn get_balance(&self) -> surf::Result<CoinValue> {

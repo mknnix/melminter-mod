@@ -66,7 +66,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
         let worker = tree.add_child("worker");
         let worker = Arc::new(Mutex::new(worker));
-        let my_speed = compute_speed().await;
         let is_testnet = opts.wallet.summary().await?.network == NetID::Testnet;
         let client = get_valclient(is_testnet, opts.connect).await?;
 
@@ -138,6 +137,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 }
             }
 
+            let my_speed = compute_speed().await;
             let my_difficulty = {
                 let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
                 match cli_opts.fixed_diff {
@@ -145,11 +145,12 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     Some(diff) => { diff }
                 }
             };
-            let approx_iter = Duration::from_secs_f64(2.0f64.powi(my_difficulty as _) / my_speed);
+            let approx_iter = 2.0f64.powi(my_difficulty as _) / my_speed;
+
             worker.lock().unwrap().message(
                 MessageLevel::Info,
                 format!(
-                    "Selected difficulty {}: {} (approx. {:?} / tx)",
+                    "Selected difficulty {}: {} (approx. {:.3}s / tx)",
 
                     if let Some(_) = cli_opts.fixed_diff { "[fixed]" } else { "[auto]" },
                     my_difficulty,
@@ -159,13 +160,14 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
             let threads = opts.threads;
             let fastest_speed = client.snapshot().await?.current_header().dosc_speed as f64 / 30.0;
-            worker.lock().unwrap().info(format!(
-                "Max speed on chain: {:.2} kH/s",
-                fastest_speed / 1000.0
-            ));
+            worker.lock().unwrap().info(format!("Max speed on chain: {:.2} kH/s", fastest_speed / 1000.0));
+
+            let seed_ttl = mint_state.set_seed_expire(Duration::from_secs_f64(approx_iter*2.0));
+            worker.lock().unwrap().info(format!("Seed TTL: {} blocks ({}s)", seed_ttl, seed_ttl*30));
 
             // if requested, stopping before generate seed
             if recv_stop.try_recv().is_ok() {
+                log::warn!("melminter process terminating");
                 std::process::exit(0);
             }
 
@@ -302,14 +304,14 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         threads,
                     ).await?;
 
-                    let ended = started.elapsed();
-                    println!("Proof Completed {} kH (total {} threads) in time {:?} | offset: (approx){:?} - (real){:?} = {}",
+                    let ended = started.elapsed().as_secs_f64();
+                    println!("Proof Completed {} kH (total {:.3} threads) in time {:.3}s | offset: (approx){:.3}s - (real){:.3}s = {:.3}s",
                         total * threads, threads, ended,
 
                         // calculating deviation for improve the accuracy of predicted time spent...
                         approx_iter,
                         ended,
-                        approx_iter.as_secs_f64() - ended.as_secs_f64(), // f64 allow negative
+                        approx_iter - ended,
                     );
 
                     std::mem::drop(speed_task);
