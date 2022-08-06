@@ -22,9 +22,6 @@ mod worker;
 // use smol::prelude::*;
 use crate::worker::{Worker, WorkerConfig};
 
-// get the version of this program itself
-const VERSION: Option<&str> = option_env!("CARGO_PKG_VERSION");
-
 fn main() -> surf::Result<()> {
     let dash_root = Tree::default();
     let dash_options = line::Options {
@@ -40,9 +37,11 @@ fn main() -> surf::Result<()> {
     {
         let mut lb = env_logger::Builder::new();
         if opts.debug {
+            // (debug mode) apply DEBUG log-level to all modules
             lb.filter(None, log::LevelFilter::Debug);
         } else {
-            lb.filter(Some("melminter_mod"), log::LevelFilter::Info);
+            // defaults to INFO log-level and only apply to this program itself.
+            lb.filter(Some( env!("CARGO_PKG_NAME").replace("-", "_").as_str() ), log::LevelFilter::Info);
         }
         lb.init();
     }
@@ -81,7 +80,7 @@ fn main() -> surf::Result<()> {
             NetID::Mainnet
         };
 
-        println!("melminter v{} / connect to melwalletd endpoint {}", VERSION.unwrap_or("(N/A)"), daemon_addr);
+        println!("{} v{} / connect to melwalletd endpoint {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr);
         println!("");
 
         // generate wallet name for minting
