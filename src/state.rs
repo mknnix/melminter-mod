@@ -175,6 +175,7 @@ impl MintState {
                     let coin_height = self.wallet.get_transaction_status(id.txhash).await?.confirmed_height.unwrap();
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
+                        log::debug!("skipping too old seed: ttl={}, coin={:?}", ttl, (id,data));
                         continue;
                     }
                 }
@@ -182,6 +183,7 @@ impl MintState {
             }
         }
 
+        log::debug!("got seeds list: {:?}", &seeds);
         Ok(seeds)
     }
 
