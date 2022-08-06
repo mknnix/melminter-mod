@@ -1,6 +1,6 @@
 [package]
 name = "melminter-mod"
-version = "0.7.10"
+version = "0.7.11"
 authors = ["nullchinchilla <nullchinchilla@pm.me>", "mkn <email@please.see.git.commit>"]
 edition = "2018"
 
