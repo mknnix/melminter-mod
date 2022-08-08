@@ -191,7 +191,10 @@ impl MintState {
                 if let Some(ttl) = self.seed_ttl {
                     let coin_height = match self.wallet.wait_transaction(id.txhash).await {
                         Ok(v) => v,
-                        Err(_) => { continue; }
+                        Err(e) => {
+                            log::warn!("cannot get seed height: {:?}", e);
+                            continue;
+                        }
                     };
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
