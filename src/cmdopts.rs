@@ -6,9 +6,9 @@ use themelio_structs::Address;
 
 #[derive(Debug, StructOpt, Clone)]
 pub struct CmdOpts {
-    #[structopt(long)]
-    /// Wallet API endpoint. For example 127.0.0.1:11773
-    pub daemon: Option<SocketAddr>,
+    #[structopt(long, default_value = "127.0.0.1:11773")]
+    /// Wallet API endpoint (daemon address of melwalletd)
+    pub daemon: SocketAddr,
 
     #[structopt(long, default_value = "__melminter_")]
     /// Prefixes for the "owned" wallets created by the melminter.
@@ -19,10 +19,6 @@ pub struct CmdOpts {
     /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL.
     /// otherwise will do nothing and display warning if you doesn't specify one.
     pub payout: Option<Address>,
-
-    #[structopt(long)]
-    /// Whether to use testnet
-    pub testnet: bool,
 
     #[structopt(long)]
     /// Force a certain number of threads. Defaults to the number of *physical* CPUs.

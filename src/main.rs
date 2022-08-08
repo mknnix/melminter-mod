@@ -1,8 +1,4 @@
-use std::{
-    future::Future,
-    process::{Command, Stdio},
-    time::Duration,
-};
+use std::{ future::Future, time::Duration };
 
 use anyhow::Context;
 use cmdopts::CmdOpts;
@@ -13,7 +9,6 @@ use prodash::{
     Tree,
 };
 use structopt::StructOpt;
-use tap::Tap;
 use themelio_structs::{CoinValue, NetID};
 
 mod cmdopts;
@@ -47,40 +42,19 @@ fn main() -> surf::Result<()> {
     }
 
     smol::block_on(async move {
-        // either start a daemon, or use the provided one
-        let mut _running_daemon = None;
-        let daemon_addr = if let Some(addr) = opts.daemon {
-            addr
-        } else {
-            // start a daemon naw
-            let port = fastrand::usize(50000..65000); // avoid use 11773/11814 or any usual port
-            let daemon = Command::new("melwalletd")
-                .arg("--listen")
-                .arg(format!("127.0.0.1:{}", port))
-                .arg("--wallet-dir")
-                .arg(dirs::config_dir().unwrap().tap_mut(|p| p.push("melminter")))
-                .stderr(Stdio::null())
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .spawn()
-                .unwrap();
-            smol::Timer::after(Duration::from_secs(1)).await;
-            _running_daemon = Some(daemon);
-            format!("127.0.0.1:{}", port).parse().unwrap()
-        };
-        scopeguard::defer!({
-            if let Some(mut d) = _running_daemon {
-                let _ = d.kill();
-            }
-        });
+        // use the provided address of melwalletd daemon, and auto detect network type.
+        let daemon_addr = opts.daemon;
         let daemon = DaemonClient::new(daemon_addr);
-        let network_id = if opts.testnet {
-            NetID::Testnet
-        } else {
-            NetID::Mainnet
-        };
 
-        println!("{} v{} / connect to melwalletd endpoint {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr);
+        // For latest version of melwalletd, the HTTP API "/summary?testnet=1" does not works anymore (melwalletd no longer connect both mainnet & testnet, must use option "--network" select one)
+        // melwalletd no longer returns a different result based on "/summary?testnet=1" (it always depends on the value specified by "--network")
+        // So just need to get the returned result to determine which network type.
+        let network_id: NetID = daemon.get_summary(false).await?.network;
+
+        // Is CustomXX also a kind of testnet ??
+        let is_testnet = network_id != NetID::Mainnet;
+
+        println!("{} v{} / connect to melwalletd endpoint {} ({:?})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr, network_id);
         println!("");
 
         // generate wallet name for minting
@@ -92,7 +66,7 @@ fn main() -> surf::Result<()> {
                 let mut evt = dash_root.add_child(format!("creating new wallet {}", wallet_name));
                 evt.init(None, None);
                 log::info!("creating new wallet");
-                daemon.create_wallet(&wallet_name, opts.testnet, None, None).await?;
+                daemon.create_wallet(&wallet_name, is_testnet, None, None).await?;
                 daemon.get_wallet(&wallet_name).await?.context("just-created wallet gone?!")?
             }
         };
@@ -172,16 +146,6 @@ macro_rules! panic_exit {
         panic!($($arg)*)
     };
 }
-/*
-fn panic_exit(status: i32, text: &str) {
-    let orig_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        orig_hook(panic_info);
-        std::process::exit(status);
-    }));
-    panic!("{}", text)
-}
-*/
 
 // Repeats something until it stops failing
 async fn repeat_fallible<T, E: std::fmt::Debug, F: Future<Output = Result<T, E>>>(

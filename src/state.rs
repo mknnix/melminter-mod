@@ -189,7 +189,10 @@ impl MintState {
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
                 if let Some(ttl) = self.seed_ttl {
-                    let coin_height = self.wallet.wait_transaction(id.txhash).await?;
+                    let coin_height = match self.wallet.wait_transaction(id.txhash).await {
+                        Ok(v) => v,
+                        Err(_) => { continue; }
+                    };
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
                         log::debug!("skipping too old seed: ttl={}, coin={:?}", ttl, (id,data));
