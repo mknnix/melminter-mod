@@ -362,7 +362,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                 retry_lefts -= 1;
                                 submits.push_back((coin, data, proof));
                             } else {
-                                log::warn!("dropping proof {:?} because reach max retry limit", (coin, data, proof));
+                                log::warn!("dropping proof {:?} because reach max retry limit", (coin, data));
                             }
                         },
                         Ok(res) => {

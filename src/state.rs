@@ -56,8 +56,8 @@ impl MintState {
             return blocks;
         }
 
-        let min = 3600 * 2;
-        let max = 86400;
+        let min = 3600 * 3;
+        let max = 3600 * 12;
 
         let mut secs = lifetime.as_secs();
         if secs < min { secs = min; }
