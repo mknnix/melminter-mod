@@ -61,6 +61,8 @@ impl Worker {
 
 async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result<()> {
     let tree = opts.tree.clone();
+
+    #[allow(unreachable_code)]
     repeat_fallible(|| async {
         let cli_opts = opts.cli_opts.clone();
 

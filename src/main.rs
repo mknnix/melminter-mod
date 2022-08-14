@@ -18,6 +18,8 @@ mod worker;
 use crate::worker::{Worker, WorkerConfig};
 
 fn main() -> surf::Result<()> {
+    use std::io::Write;
+
     let dash_root = Tree::default();
     let dash_options = line::Options {
         keep_running_if_progress_is_empty: true,
@@ -44,18 +46,18 @@ fn main() -> surf::Result<()> {
     smol::block_on(async move {
         // use the provided address of melwalletd daemon, and auto detect network type.
         let daemon_addr = opts.daemon;
+        print!("{} v{} / connect to melwalletd endpoint {} (", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr); std::io::stdout().flush()?;
+
         let daemon = DaemonClient::new(daemon_addr);
 
         // For latest version of melwalletd, the HTTP API "/summary?testnet=1" does not works anymore (melwalletd no longer connect both mainnet & testnet, must use option "--network" select one)
         // melwalletd no longer returns a different result based on "/summary?testnet=1" (it always depends on the value specified by "--network")
         // So just need to get the returned result to determine which network type.
         let network_id: NetID = daemon.get_summary(false).await?.network;
+        println!("{})", network_id);
 
         // Is CustomXX also a kind of testnet ??
         let is_testnet = network_id != NetID::Mainnet;
-
-        println!("{} v{} / connect to melwalletd endpoint {} ({:?})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr, network_id);
-        println!("");
 
         // generate wallet name for minting
         let wallet_name = format!("{}{:?}", opts.wallet_prefix, network_id);

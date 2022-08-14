@@ -166,6 +166,9 @@ impl MintState {
                 .await?;
 
             let fees = tx.fee;
+            let sent_hash = self.wallet.send_tx(tx).await?;
+
+            log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.fee_history.push(FeeRecord{
                 f: 1,
                 time: SystemTime::now(),
@@ -174,8 +177,6 @@ impl MintState {
                 income: CoinValue(0),
             });
 
-            let sent_hash = self.wallet.send_tx(tx).await?;
-            log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.wallet.wait_transaction(sent_hash).await?;
         }
     }
@@ -296,6 +297,9 @@ impl MintState {
             log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
         }
 
+        let txhash = self.wallet.send_tx(tx).await?;
+
+        log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
         self.fee_history.push(FeeRecord{
             f: 2,
             time: SystemTime::now(),
@@ -304,8 +308,6 @@ impl MintState {
             income: mels,
         });
 
-        let txhash = self.wallet.send_tx(tx).await?;
-        log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
         Ok(txhash)
     }
 
@@ -355,6 +357,9 @@ impl MintState {
             log::warn!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
         }
 
+        let txhash = self.wallet.send_tx(tx).await?;
+
+        log::debug!("(fee-safe) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.fee_history.push(FeeRecord{
             f: 3,
             time: SystemTime::now(),
@@ -363,8 +368,6 @@ impl MintState {
             income: mels,
         });
 
-        let txhash = self.wallet.send_tx(tx).await?;
-        log::debug!("(fee-safe) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.wallet.wait_transaction(txhash).await?;
         Ok(())
     }
