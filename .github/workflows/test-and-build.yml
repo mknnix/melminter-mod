@@ -31,27 +31,21 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Update Apt
-        run: sudo apt update
+      - name: Update apt and install Musl
+        run: sudo apt update && sudo apt -y install musl musl-tools
 
-      - name: Install Musl
-        run: sudo apt -y install musl musl-tools
-
-      - name: Add Musl Target Triple
+      - name: Rust add Musl target triple
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Build Linux (Musl)
         run: cargo build --release --target x86_64-unknown-linux-musl --verbose
-
-      - name: Run tests
-        run: cargo test --release --target x86_64-unknown-linux-musl --verbose
 
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-linux-musl
           path: target/x86_64-unknown-linux-musl/release/melminter-mod
 
-  build-cross:
+  build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -59,21 +53,26 @@ jobs:
       - name: Install Cross
         run: cargo install cross
 
-      - name: Build windows & android
-        run: |
-          cross build --release --target x86_64-pc-windows-gnu --verbose &
-          cross build --release --target aarch64-linux-android --verbose &
-          wait
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: melminter-mod.amd64-windows.exe
-          path: target/x86_64-pc-windows-gnu/release/melminter-mod.exe
+      - name: Cross Build android
+        run: cross build --release --target aarch64-linux-android --verbose
 
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.arm64-android
           path: target/aarch64-linux-android/release/melminter-mod
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build (windows)
+        run: cargo build --release --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-windows.exe
+          path: target/release/melminter-mod.exe
 
   build-mac:
     runs-on: macos-latest
