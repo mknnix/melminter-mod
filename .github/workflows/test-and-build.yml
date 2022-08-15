@@ -21,6 +21,11 @@ jobs:
       - name: Run tests
         run: cargo test --release --verbose
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-linux
+          path: target/release/melminter-mod
+
   build-linux-musl:
     runs-on: ubuntu-latest
     steps:
@@ -41,6 +46,11 @@ jobs:
       - name: Run tests
         run: cargo test --release --target x86_64-unknown-linux-musl --verbose
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-linux-musl
+          path: target/release/melminter-mod
+
   build-cross:
     runs-on: ubuntu-latest
     steps:
@@ -52,8 +62,18 @@ jobs:
       - name: Build windows
         run: cross build --release --target x86_64-pc-windows-gnu --verbose
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-windows.exe
+          path: target/x86_64-pc-windows-gnu/release/melminter-mod.exe
+
       - name: Build android
         run: cross build --release --target aarch64-linux-android --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.arm64-android
+          path: target/aarch64-linux-android/release/melminter-mod
 
   build-mac:
     runs-on: macos-latest
@@ -62,3 +82,9 @@ jobs:
       
       - name: Build (mac)
         run: cargo build --release --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-mac
+          path: target/release/melminter-mod
+
