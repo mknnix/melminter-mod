@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: melminter-mod.amd64-windows.exe
+          name: melminter-mod.amd64-windows
           path: target/release/melminter-mod.exe
 
   build-mac:

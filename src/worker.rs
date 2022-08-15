@@ -307,8 +307,10 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     ).await?;
 
                     let ended = started.elapsed().as_secs_f64();
-                    println!("Proof Completed {} kH (total {:.3} threads) in time {:.3}s | offset: (approx){:.3}s - (real){:.3}s = {:.3}s",
-                        total * threads, threads, ended,
+                    let kh = total * threads;
+                    println!("Proof Completed {} kH (total {:.3} threads) in time {:.3}s | Average Speed: {:.3}kH/s | Offset: (approx){:.3}s - (real){:.3}s = {:.3}s",
+                        kh, threads, ended,
+                        (kh as f64) / ended,
 
                         // calculating deviation for improve the accuracy of predicted time spent...
                         approx_iter,
