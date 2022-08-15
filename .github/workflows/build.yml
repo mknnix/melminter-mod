@@ -1,0 +1,123 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Cross Build aarch64 android
+        run: cross build --release --target aarch64-linux-android --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.aarch64-android
+          path: target/aarch64-linux-android/release/melminter-mod
+
+      - name: Cross Build x86 android (64-bit)
+        run: cross build --release --target x86_64-linux-android --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-android
+          path: target/x86_64-linux-android/release/melminter-mod
+
+      - name: Cross Build aarch64 linux
+        run: cross build --release --target aarch64-unknown-linux-gnu --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.aarch64-linux
+          path: target/aarch64-unknown-linux-gnu/release/melminter-mod
+
+      - name: Cross Build aarch64 linux (musl)
+        run: cross build --release --target aarch64-unknown-linux-musl --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.aarch64-linux-musl
+          path: target/aarch64-unknown-linux-musl/release/melminter-mod
+
+      - name: Cross Build amd64 FreeBSD
+        run: cross build --release --target x86_64-unknown-freebsd --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-freebsd
+          path: target/x86_64-unknown-freebsd/release/melminter-mod
+
+      - name: Cross Build amd64 NetBSD
+        run: cross build --release --target x86_64-unknown-netbsd --verbose
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-netbsd
+          path: target/x86_64-unknown-netbsd/release/melminter-mod
+
+  amd64-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build Linux
+        run: cargo build --release --verbose
+
+      - name: Run tests
+        run: cargo test --release --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-linux
+          path: target/release/melminter-mod
+
+  amd64-linux-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Update apt and install Musl
+        run: sudo apt update && sudo apt -y install musl musl-tools
+
+      - name: Rust add Musl target triple
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Build Linux (Musl)
+        run: cargo build --release --target x86_64-unknown-linux-musl --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-linux-musl
+          path: target/x86_64-unknown-linux-musl/release/melminter-mod
+
+  amd64-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build (windows)
+        run: cargo build --release --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-windows
+          path: target/release/melminter-mod.exe
+
+  amd64-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Build (mac)
+        run: cargo build --release --verbose
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.amd64-mac
+          path: target/release/melminter-mod
+
