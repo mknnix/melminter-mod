@@ -15,10 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      # do not continue-on-error if cross install failed
       - name: Install Cross
         run: cargo install cross
 
       - name: Cross Build aarch64 android
+        continue-on-error: true
         run: cross build --release --target aarch64-linux-android --verbose
       - uses: actions/upload-artifact@v3
         with:
@@ -26,6 +28,7 @@ jobs:
           path: target/aarch64-linux-android/release/melminter-mod
 
       - name: Cross Build x86 android (64-bit)
+        continue-on-error: true
         run: cross build --release --target x86_64-linux-android --verbose
       - uses: actions/upload-artifact@v3
         with:
@@ -33,6 +36,7 @@ jobs:
           path: target/x86_64-linux-android/release/melminter-mod
 
       - name: Cross Build aarch64 linux
+        continue-on-error: true
         run: cross build --release --target aarch64-unknown-linux-gnu --verbose
       - uses: actions/upload-artifact@v3
         with:
@@ -40,6 +44,7 @@ jobs:
           path: target/aarch64-unknown-linux-gnu/release/melminter-mod
 
       - name: Cross Build aarch64 linux (musl)
+        continue-on-error: true
         run: cross build --release --target aarch64-unknown-linux-musl --verbose
       - uses: actions/upload-artifact@v3
         with:
@@ -47,6 +52,7 @@ jobs:
           path: target/aarch64-unknown-linux-musl/release/melminter-mod
 
       - name: Cross Build amd64 FreeBSD
+        continue-on-error: true
         run: cross build --release --target x86_64-unknown-freebsd --verbose
       - uses: actions/upload-artifact@v3
         with:
@@ -54,11 +60,20 @@ jobs:
           path: target/x86_64-unknown-freebsd/release/melminter-mod
 
       - name: Cross Build amd64 NetBSD
+        continue-on-error: true
         run: cross build --release --target x86_64-unknown-netbsd --verbose
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-netbsd
           path: target/x86_64-unknown-netbsd/release/melminter-mod
+
+      - name: Cross Build WebAssembly
+        continue-on-error: true
+        run: cross build --release --target wasm32-unknown-emscripten --verbose ; ls -hl target/wasm32-unknown-emscripten/release/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: melminter-mod.wasm32-unknown-emscripten
+          path: target/wasm32-unknown-emscripten/release/melminter-mod
 
   amd64-linux:
     runs-on: ubuntu-latest
