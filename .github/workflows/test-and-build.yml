@@ -10,19 +10,47 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build-linux:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
+
+      - name: Build Linux
+        run: cargo build --release --verbose
+
+      - name: Run tests
+        run: cargo test --release --verbose
+
+  build-linux-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
       - name: Update Apt
         run: sudo apt update
+
       - name: Install Musl
         run: sudo apt -y install musl musl-tools
+
       - name: Add Musl Target Triple
         run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Build Linux (Musl)
+        run: cargo build --release --target x86_64-unknown-linux-musl --verbose
+
       - name: Run tests
-        run: cargo test --target x86_64-unknown-linux-musl --verbose
-      - name: Build (Musl)
-        run: cargo build --target x86_64-unknown-linux-musl --verbose
+        run: cargo test --release --target x86_64-unknown-linux-musl --verbose
+
+  build-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build windows
+        run: cross build --release --target x86_64-pc-windows-gnu --verbose
+
+      - name: Build mac os x
+        run: cross build --release --target x86_64-apple-darwin --verbose
