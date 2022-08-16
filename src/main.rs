@@ -46,7 +46,13 @@ fn main() -> surf::Result<()> {
     smol::block_on(async move {
         // use the provided address of melwalletd daemon, and auto detect network type.
         let daemon_addr = opts.daemon;
-        print!("{} v{} / connect to melwalletd endpoint {} (", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), daemon_addr); std::io::stdout().flush()?;
+
+        // print version and daemon address
+        print!("{} v{} ({}) / connect to melwalletd endpoint {} (",
+               env!("CARGO_PKG_NAME"),
+               env!("CARGO_PKG_VERSION"), env!("GIT_COMMIT_HASH"),
+               daemon_addr
+        ); std::io::stdout().flush()?;
 
         let daemon = DaemonClient::new(daemon_addr);
 
@@ -54,7 +60,10 @@ fn main() -> surf::Result<()> {
         // melwalletd no longer returns a different result based on "/summary?testnet=1" (it always depends on the value specified by "--network")
         // So just need to get the returned result to determine which network type.
         let network_id: NetID = daemon.get_summary(false).await?.network;
+
+        // println network id
         println!("{})", network_id);
+        println!("");
 
         // Is CustomXX also a kind of testnet ??
         let is_testnet = network_id != NetID::Mainnet;

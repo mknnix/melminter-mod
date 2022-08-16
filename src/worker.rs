@@ -392,8 +392,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 .add_child("waiting for confirmation of proof");
             sub.init(Some(waits.len()), None);
             for to_wait in waits {
-                sub.inc();
                 opts.wallet.wait_transaction(to_wait).await?;
+                sub.inc();
             }
         }
 
@@ -410,7 +410,7 @@ async fn compute_speed() -> f64 {
         smol::unblock(move || melpow::Proof::generate(&[], difficulty, Tip910MelPowHash)).await;
         let elapsed = start.elapsed();
         let speed = 2.0f64.powi(difficulty as _) / elapsed.as_secs_f64();
-        if elapsed.as_secs_f64() > 0.5 {
+        if elapsed.as_secs_f64() > 1.0 {
             return speed;
         }
     }
