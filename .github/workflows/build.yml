@@ -17,6 +17,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
+          git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
@@ -145,6 +146,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
+          git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
@@ -177,6 +179,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
+          git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
@@ -212,6 +215,8 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
+          git config --global user.name github-actions
+          git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git checkout bin
           mkdir bin\${{github.sha}}\
@@ -241,6 +246,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
+          git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
