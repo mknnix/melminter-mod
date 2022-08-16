@@ -17,7 +17,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
-          git pull origin bin --ff-only
+          git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
           git checkout master
@@ -145,7 +145,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
-          git pull origin bin --ff-only
+          git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
           git checkout master
@@ -177,7 +177,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
-          git pull origin bin --ff-only
+          git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
           git checkout master
@@ -212,7 +212,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
-          git pull origin bin --ff-only
+          git pull origin bin --rebase
           git checkout bin
           mkdir bin\${{github.sha}}\
           git checkout master
@@ -241,7 +241,7 @@ jobs:
 
       - name: Create binary directory for this job
         run: |
-          git pull origin bin --ff-only
+          git pull origin bin --rebase
           git checkout bin
           mkdir bin/${{github.sha}}/
           git checkout master
