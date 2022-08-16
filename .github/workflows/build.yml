@@ -20,7 +20,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
 
       # do not continue-on-error if cross install failed
@@ -39,7 +39,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/aarch64-linux-android/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.aarch64-android
+          if cp -v target/aarch64-linux-android/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.aarch64-android
           then
             git add -A
             git commit -m "upload binary of melminter.mod aarch64 android"
@@ -59,7 +59,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/x86_64-linux-android/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-android
+          if cp -v target/x86_64-linux-android/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-android
           then
             git add -A
             git commit -m "upload binary of melminter.mod amd64 android"
@@ -79,7 +79,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.aarch64-linux
+          if cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.aarch64-linux
           then
             git add -A
             git commit -m "upload binary of melminter.mod aarch64 linux"
@@ -99,7 +99,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.aarch64-linux-musl
+          if cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.aarch64-linux-musl
             git add -A
             git commit -m "upload binary of melminter.mod aarch64 linux (musl)"
             git push origin bin
@@ -118,7 +118,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-freebsd
+          if cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-freebsd
           then
             git add -A
             git commit -m "upload binary of melminter.mod amd64 freebsd"
@@ -138,7 +138,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-netbsd
+          if cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-netbsd
           then
             git add -A
             git commit -m "upload binary of melminter.mod amd64 netbsd"
@@ -158,7 +158,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          if cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
+          if cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
           then
             git add -A
             git commit -m "upload binary of melminter.mod wasm32-unknown-emscripten"
@@ -176,7 +176,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
 
       - name: Build Linux
@@ -194,7 +194,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-linux
+          cp -v target/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-linux
           git add -A
           git commit -m "upload binary of melminter.mod amd64 linux"
           git push origin bin
@@ -210,7 +210,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
 
       - name: Update apt and install Musl
@@ -231,7 +231,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/x86_64-unknown-linux-musl/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-linux-musl
+          cp -v target/x86_64-unknown-linux-musl/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-linux-musl
           git add -A
           git commit -m "upload binary of melminter.mod amd64 linux (musl)"
           git push origin bin
@@ -248,7 +248,7 @@ jobs:
           git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
         shell: bash
 
@@ -264,7 +264,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp target/release/melminter-mod.exe bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-windows.exe
+          cp target/release/melminter-mod.exe bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-windows.exe
           git add -A
           git commit -m "upload binary of melminter.mod amd64 windows"
           git push origin bin
@@ -281,7 +281,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
       
       - name: Build (mac)
@@ -296,7 +296,7 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" master)__${{github.sha}}/melminter-mod.amd64-mac
+          cp -v target/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.amd64-mac
           git add -A
           git commit -m "upload binary of melminter.mod amd64 mac"
           git push origin bin
