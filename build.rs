@@ -1,6 +1,6 @@
 fn git_commit_hash() -> String {
     use std::process::Command;
-    let hash: String = String::from_utf8( Command::new("git").arg("rev-parse").arg("HEAD").output().unwrap().stdout ).unwrap();
+    let hash: String = String::from_utf8( Command::new("git").arg("rev-parse").arg("origin/master").output().unwrap().stdout ).unwrap();
     hash
 }
 
