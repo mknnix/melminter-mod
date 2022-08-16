@@ -115,7 +115,7 @@ impl MintState {
         if lost_coins > CoinValue(0) {
             let first = fh[0];
             let last = fh[fh_len - 1];
-            log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time).unwrap_or(Duration::new(0, 0)), first.balance, last.balance, first.balance - last.balance);
+            log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time), first.balance, last.balance, first.balance - last.balance);
         }
 
         if lost_coins >= max_lost {
@@ -199,7 +199,7 @@ impl MintState {
                     };
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
-                        log::debug!("skipping too old seed: ttl={}, coin={:?}", ttl, (id,data));
+                        log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (id,data));
                         continue;
                     }
                 }

@@ -25,6 +25,7 @@ pub struct WorkerConfig {
     pub wallet: WalletClient,
     pub payout: Option<Address>,
     pub connect: SocketAddr,
+    pub netid: NetID,
     //pub name: String,
     pub tree: prodash::Tree,
     pub threads: usize,
@@ -65,11 +66,11 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
     #[allow(unreachable_code)]
     repeat_fallible(|| async {
         let cli_opts = opts.cli_opts.clone();
-
         let worker = tree.add_child("worker");
         let worker = Arc::new(Mutex::new(worker));
-        let is_testnet = opts.wallet.summary().await?.network == NetID::Testnet;
-        let client = get_valclient(is_testnet, opts.connect).await?;
+        let netid = opts.netid;
+        let is_testnet = netid != NetID::Mainnet;
+        let client = get_valclient(netid, opts.connect).await?;
 
         let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
         let quit_without_profit = ! cli_opts.disable_profit_failsafe;
@@ -417,16 +418,10 @@ async fn compute_speed() -> f64 {
     unreachable!()
 }
 
-async fn get_valclient(testnet: bool, connect: SocketAddr) -> anyhow::Result<ValClient> {
-    let client = themelio_nodeprot::ValClient::new(
-        if testnet {
-            NetID::Testnet
-        } else {
-            NetID::Mainnet
-        },
-        connect,
-    );
-    if testnet {
+async fn get_valclient(net: NetID, connect: SocketAddr) -> anyhow::Result<ValClient> {
+    let client = themelio_nodeprot::ValClient::new(net, connect);
+
+    if net == NetID::Testnet {
         client.trust(themelio_bootstrap::checkpoint_height(NetID::Testnet).unwrap());
     } else {
         client.trust(themelio_bootstrap::checkpoint_height(NetID::Mainnet).unwrap());

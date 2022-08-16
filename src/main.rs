@@ -123,6 +123,7 @@ fn main() -> surf::Result<()> {
             wallet: worker_wallet,
             payout: opts.payout,
             connect: themelio_bootstrap::bootstrap_routes(network_id)[0],
+            netid: network_id,
             //name: "".into(),
             tree: dash_root.clone(),
             threads: opts.threads.unwrap_or_else(num_cpus::get_physical),

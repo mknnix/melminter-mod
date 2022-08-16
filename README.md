@@ -10,17 +10,18 @@ curl https://scan.themelio.org/raw/blocks/1403000/37930e97c3b935f1aabcfc89fe0335
 
 ##### additional features:
 1. balance safe, if due to issue causes your much coins paid for fees, then automatic quitting program. options: `--balance-max-losts` | flags: `--disable-profit-failsafe`
-2. can specify a fixed difficulty if you need shorter the default interval 12 hours. options: `--fixed-diff`
+2. can specify a fixed difficulty if you need shorter the default interval (12 hours). options: `--fixed-diff`
 3. percentage display the current minting status (for total threads).
-4. as a option to skip the balance check (>= 0.05 for fee reserve). flags: `--skip-fee-check`
-5. smallest text change (such as "expected daily return"), version and daemon-address display (useful for discovery the melwalletd random-port of melminter started)
+4. as a option to skip the balance check (>= 0.05 for fee reserve). flags: `--skip-balance-check`
+5. minor text changes (such as "expected daily return"), version and daemon-address display.
 6. optional `--payout`, this program will store all minted coins in working-wallet (also allow you export secret key) if not specify one payout address.
 7. you can use Ctrl+C key manual request stopping mint (it will prevent generate unnecessary new-coin transaction for next mint round)
 8. older new-coin tx(s) will be automatically ignored (min TTL 3 hours, and use 24 hours as max lifetime of a new-coin tx), because too old seeds will result in much lower rewards.
+9. since 0.8.x version, there is no longer an "internal melwalletd" behavior automatic-started by the program itself, further decoupling (similar to the melwallet-cli thin client). and because this is not a forward-compatible change, so incremental the minor version number; Please note: Users upgrading from 0.7.x to 0.8.x will need to migrate their minting wallet paths, unix-like/linux/mac systems are located at `~/.config/melminter/`, windows at `%appdata%/melminter/`
 
 ##### overview of mel-mint progressin:
-1. you enter a threads number `--threads` (or auto), and give a destination of your mints `--payout` ; and melminter will create a minting-wallet for itself (default path: `~/.config/melminter/` for Unix-like. ~~or micro$oft window$ user `%appdata%/melminter/`~~), but you can manual use option `--daemon` and the program will connecting that IP address (not start one itself), and use melwalletd options `--wallet-dir` for which path you like.
-2. and... for now... (if you are a new member) need some small `> 0.05` MEL to seeding your incomes, if you does not have balance: please join the Discord community to get your first airdrop 1.00 MEL; because themelio mint needed to pay for network transaction fees, **hope this issue will resolved at future...** ; if you make sure have some but less than `0.05` and if you still want to minting, please see this option `--skip-amount-check` [Note: for now this cannot make it fee-less, the program will stopping work with zero balance]
+1. you enter a threads number `--threads` (or auto), and give a destination of your minted coins `--payout` ; and melminter will create a minting-wallet for itself (0.8 version: defaults to uses 127.0.0.1:11773; ~~version 0.7 and older: default path: `~/.config/melminter/` for Unix-like. or micro$oft window$ user `%appdata%/melminter/`~~). you can manual use option `--daemon` and the program will connecting that IP address (not start one itself), and use melwalletd options `--wallet-dir` for which path you like.
+2. and... for now... (if you are a new member) need some small `> 0.05` MEL to seeding your incomes, if you does not have balance: please join the Discord community to get your first airdrop 1.00 MEL; because themelio mint needed to pay for network transaction fees, **hope this issue will resolved at future...** ; if you make sure have some but less than `0.05` and if you still want to minting, please see this option `--skip-balance-check` [Note: for right now, this cannot make it fee-less, the program will stopping work with zero balance]
 3. now you can starting your minter program, and to get your first ERG(s).
 (note: for all arguments please use `melminter --help` for official program, or `melminter-mod` for this one)
 
