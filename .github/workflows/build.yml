@@ -38,10 +38,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/aarch64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-android
-          git add -A
-          git commit -m "upload binary of melminter.mod aarch64 android"
-          git push origin bin
+          if cp -v target/aarch64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-android
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod aarch64 android"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build x86 android (64-bit)
@@ -55,10 +57,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/x86_64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-android
-          git add -A
-          git commit -m "upload binary of melminter.mod amd64 android"
-          git push origin bin
+          if cp -v target/x86_64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-android
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod amd64 android"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build aarch64 linux
@@ -72,10 +76,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux
-          git add -A
-          git commit -m "upload binary of melminter.mod aarch64 linux"
-          git push origin bin
+          if cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod aarch64 linux"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build aarch64 linux (musl)
@@ -89,10 +95,11 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux-musl
-          git add -A
-          git commit -m "upload binary of melminter.mod aarch64 linux (musl)"
-          git push origin bin
+          if cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux-musl
+            git add -A
+            git commit -m "upload binary of melminter.mod aarch64 linux (musl)"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build amd64 FreeBSD
@@ -106,10 +113,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-freebsd
-          git add -A
-          git commit -m "upload binary of melminter.mod amd64 freebsd"
-          git push origin bin
+          if cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-freebsd
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod amd64 freebsd"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build amd64 NetBSD
@@ -123,10 +132,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-netbsd
-          git add -A
-          git commit -m "upload binary of melminter.mod amd64 netbsd"
-          git push origin bin
+          if cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-netbsd
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod amd64 netbsd"
+            git push origin bin
+          fi
           git switch master
 
       - name: Cross Build WebAssembly
@@ -140,10 +151,12 @@ jobs:
         run: |
           git switch bin
           git pull origin bin
-          cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
-          git add -A
-          git commit -m "upload binary of melminter.mod wasm32-unknown-emscripten"
-          git push origin bin
+          if cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
+          then
+            git add -A
+            git commit -m "upload binary of melminter.mod wasm32-unknown-emscripten"
+            git push origin bin
+          fi
           git switch master
 
   amd64-linux:
