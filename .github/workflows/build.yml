@@ -39,7 +39,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/aarch64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-android
-          git commit -a -m "upload binary of melminter.mod aarch64 android"
+          git add -A
+          git commit -m "upload binary of melminter.mod aarch64 android"
           git push origin bin
           git switch master
 
@@ -55,7 +56,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/x86_64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-android
-          git commit -a -m "upload binary of melminter.mod amd64 android"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 android"
           git push origin bin
           git switch master
 
@@ -71,7 +73,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux
-          git commit -a -m "upload binary of melminter.mod aarch64 linux"
+          git add -A
+          git commit -m "upload binary of melminter.mod aarch64 linux"
           git push origin bin
           git switch master
 
@@ -87,7 +90,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux-musl
-          git commit -a -m "upload binary of melminter.mod aarch64 linux (musl)"
+          git add -A
+          git commit -m "upload binary of melminter.mod aarch64 linux (musl)"
           git push origin bin
           git switch master
 
@@ -103,7 +107,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-freebsd
-          git commit -a -m "upload binary of melminter.mod amd64 freebsd"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 freebsd"
           git push origin bin
           git switch master
 
@@ -119,7 +124,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-netbsd
-          git commit -a -m "upload binary of melminter.mod amd64 netbsd"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 netbsd"
           git push origin bin
           git switch master
 
@@ -135,7 +141,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
-          git commit -a -m "upload binary of melminter.mod wasm32-unknown-emscripten"
+          git add -A
+          git commit -m "upload binary of melminter.mod wasm32-unknown-emscripten"
           git push origin bin
           git switch master
 
@@ -168,7 +175,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-linux
-          git commit -a -m "upload binary of melminter.mod amd64 linux"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 linux"
           git push origin bin
           git switch master
 
@@ -204,7 +212,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-linux-musl
-          git commit -a -m "upload binary of melminter.mod amd64 linux (musl)"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 linux (musl)"
           git push origin bin
           git switch master
 
@@ -235,7 +244,8 @@ jobs:
           git switch bin
           git pull origin bin
           copy target\release\melminter-mod.exe bin\${{github.sha}}\melminter-mod.amd64-windows.exe
-          git commit -a -m "upload binary of melminter.mod amd64 windows"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 windows"
           git push origin bin
           git switch master
 
@@ -265,7 +275,8 @@ jobs:
           git switch bin
           git pull origin bin
           cp -v target/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-mac
-          git commit -a -m "upload binary of melminter.mod amd64 mac"
+          git add -A
+          git commit -m "upload binary of melminter.mod amd64 mac"
           git push origin bin
           git switch master
 
