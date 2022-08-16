@@ -100,6 +100,7 @@ jobs:
           git switch bin
           git pull origin bin
           if cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/melminter-mod.aarch64-linux-musl
+          then
             git add -A
             git commit -m "upload binary of melminter.mod aarch64 linux (musl)"
             git push origin bin
