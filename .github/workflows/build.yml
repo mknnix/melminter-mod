@@ -19,9 +19,9 @@ jobs:
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
-          git checkout -b bin
+          git switch bin
           mkdir bin/${{github.sha}}/
-          git checkout -b master
+          git switch master
 
       # do not continue-on-error if cross install failed
       - name: Install Cross
@@ -36,12 +36,12 @@ jobs:
           path: target/aarch64-linux-android/release/melminter-mod
       - name: Upload binary of aarch64 android
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/aarch64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-android
           git commit -a -m "upload binary of melminter.mod aarch64 android"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build x86 android (64-bit)
         continue-on-error: true
@@ -52,12 +52,12 @@ jobs:
           path: target/x86_64-linux-android/release/melminter-mod
       - name: Upload binary of amd64 android
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/x86_64-linux-android/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-android
           git commit -a -m "upload binary of melminter.mod amd64 android"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build aarch64 linux
         continue-on-error: true
@@ -68,12 +68,12 @@ jobs:
           path: target/aarch64-unknown-linux-gnu/release/melminter-mod
       - name: Upload binary of aarch64 linux
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/aarch64-unknown-linux-gnu/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux
           git commit -a -m "upload binary of melminter.mod aarch64 linux"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build aarch64 linux (musl)
         continue-on-error: true
@@ -84,12 +84,12 @@ jobs:
           path: target/aarch64-unknown-linux-musl/release/melminter-mod
       - name: Upload binary of aarch64 linux (musl)
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/aarch64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.aarch64-linux-musl
           git commit -a -m "upload binary of melminter.mod aarch64 linux (musl)"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build amd64 FreeBSD
         continue-on-error: true
@@ -100,12 +100,12 @@ jobs:
           path: target/x86_64-unknown-freebsd/release/melminter-mod
       - name: Upload binary of amd64 freebsd
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-freebsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-freebsd
           git commit -a -m "upload binary of melminter.mod amd64 freebsd"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build amd64 NetBSD
         continue-on-error: true
@@ -116,12 +116,12 @@ jobs:
           path: target/x86_64-unknown-netbsd/release/melminter-mod
       - name: Upload binary of amd64 netbsd
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-netbsd/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-netbsd
           git commit -a -m "upload binary of melminter.mod amd64 netbsd"
           git push origin bin
-          git checkout -b master
+          git switch master
 
       - name: Cross Build WebAssembly
         continue-on-error: true
@@ -132,12 +132,12 @@ jobs:
           path: target/wasm32-unknown-emscripten/release/melminter-mod
       - name: Upload binary of wasm32-unknown-emscripten
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/wasm32-unknown-emscripten/release/melminter-mod bin/${{github.sha}}/melminter-mod.wasm32-unknown-emscripten
           git commit -a -m "upload binary of melminter.mod wasm32-unknown-emscripten"
           git push origin bin
-          git checkout -b master
+          git switch master
 
   amd64-linux:
     runs-on: ubuntu-latest
@@ -148,9 +148,9 @@ jobs:
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
-          git checkout -b bin
+          git switch bin
           mkdir bin/${{github.sha}}/
-          git checkout -b master
+          git switch master
 
       - name: Build Linux
         run: cargo build --release --verbose
@@ -165,12 +165,12 @@ jobs:
 
       - name: Upload binary of amd64 linux
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-linux
           git commit -a -m "upload binary of melminter.mod amd64 linux"
           git push origin bin
-          git checkout -b master
+          git switch master
 
   amd64-linux-musl:
     runs-on: ubuntu-latest
@@ -181,9 +181,9 @@ jobs:
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
-          git checkout -b bin
+          git switch bin
           mkdir bin/${{github.sha}}/
-          git checkout -b master
+          git switch master
 
       - name: Update apt and install Musl
         run: sudo apt update && sudo apt -y install musl musl-tools
@@ -201,12 +201,12 @@ jobs:
 
       - name: Upload binary of amd64 linux (musl)
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/x86_64-unknown-linux-musl/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-linux-musl
           git commit -a -m "upload binary of melminter.mod amd64 linux (musl)"
           git push origin bin
-          git checkout -b master
+          git switch master
 
   amd64-windows:
     runs-on: windows-latest
@@ -218,9 +218,9 @@ jobs:
           git config --global user.name github-actions
           git config --global user.email github-actions@github.com
           git pull origin bin --rebase
-          git checkout -b bin
+          git switch bin
           mkdir bin\${{github.sha}}\
-          git checkout -b master
+          git switch master
 
       - name: Build (windows)
         run: cargo build --release --verbose
@@ -232,12 +232,12 @@ jobs:
 
       - name: Upload binary of amd64 windows
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           copy target\release\melminter-mod.exe bin\${{github.sha}}\melminter-mod.amd64-windows.exe
           git commit -a -m "upload binary of melminter.mod amd64 windows"
           git push origin bin
-          git checkout -b master
+          git switch master
 
   amd64-mac:
     runs-on: macos-latest
@@ -248,9 +248,9 @@ jobs:
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git pull origin bin --rebase
-          git checkout -b bin
+          git switch bin
           mkdir bin/${{github.sha}}/
-          git checkout -b master
+          git switch master
       
       - name: Build (mac)
         run: cargo build --release --verbose
@@ -262,10 +262,10 @@ jobs:
 
       - name: Upload binary of amd64 mac
         run: |
-          git checkout -b bin
+          git switch bin
           git pull origin bin
           cp -v target/release/melminter-mod bin/${{github.sha}}/melminter-mod.amd64-mac
           git commit -a -m "upload binary of melminter.mod amd64 mac"
           git push origin bin
-          git checkout -b master
+          git switch master
 
