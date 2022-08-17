@@ -88,7 +88,7 @@ impl MintState {
             let it = fh[i];
             assert!( it.time < SystemTime::now() );
             assert!( it.kind == TxKind::Normal || it.kind == TxKind::DoscMint || it.kind == TxKind::Swap );
-            
+
             if i > 0 {
                 let prev = fh[i-1];
                 assert!( prev.time < it.time );

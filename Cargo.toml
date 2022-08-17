@@ -1,8 +1,8 @@
 [package]
 name = "melminter-mod"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["nullchinchilla <nullchinchilla@pm.me>", "mkn <email@please.see.git.commit>"]
-edition = "2018"
+edition = "2021"
 
 description = "Mod Melmint client (modified version by mkn)"
 license = "MPL-2.0"
