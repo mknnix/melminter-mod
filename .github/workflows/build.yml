@@ -22,6 +22,7 @@ jobs:
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
+          git reset --hard ${{github.sha}}
 
       # do not continue-on-error if cross install failed
       - name: Install Cross
@@ -46,6 +47,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build x86 android (64-bit)
         continue-on-error: true
@@ -66,6 +68,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build aarch64 linux
         continue-on-error: true
@@ -86,6 +89,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build aarch64 linux (musl)
         continue-on-error: true
@@ -106,6 +110,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build amd64 FreeBSD
         continue-on-error: true
@@ -126,6 +131,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build amd64 NetBSD
         continue-on-error: true
@@ -146,6 +152,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Cross Build WebAssembly
         continue-on-error: true
@@ -166,6 +173,7 @@ jobs:
             git push origin bin
           fi
           git switch master
+          git reset --hard ${{github.sha}}
 
   amd64-linux:
     runs-on: ubuntu-latest
@@ -179,6 +187,7 @@ jobs:
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Build Linux
         run: cargo build --release --verbose
@@ -200,6 +209,7 @@ jobs:
           git commit -m "upload binary of melminter.mod amd64 linux"
           git push origin bin
           git switch master
+          git reset --hard ${{github.sha}}
 
   amd64-linux-musl:
     runs-on: ubuntu-latest
@@ -213,6 +223,7 @@ jobs:
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
+          git reset --hard ${{github.sha}}
 
       - name: Update apt and install Musl
         run: sudo apt update && sudo apt -y install musl musl-tools
@@ -237,6 +248,7 @@ jobs:
           git commit -m "upload binary of melminter.mod amd64 linux (musl)"
           git push origin bin
           git switch master
+          git reset --hard ${{github.sha}}
 
   amd64-windows:
     runs-on: windows-latest
@@ -251,6 +263,7 @@ jobs:
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
+          git reset --hard ${{github.sha}}
         shell: bash
 
       - name: Build (windows)
@@ -270,6 +283,7 @@ jobs:
           git commit -m "upload binary of melminter.mod amd64 windows"
           git push origin bin
           git switch master
+          git reset --hard ${{github.sha}}
         shell: bash
 
   amd64-mac:
@@ -284,6 +298,7 @@ jobs:
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
+          git reset --hard ${{github.sha}}
       
       - name: Build (mac)
         run: cargo build --release --verbose
@@ -302,4 +317,5 @@ jobs:
           git commit -m "upload binary of melminter.mod amd64 mac"
           git push origin bin
           git switch master
+          git reset --hard ${{github.sha}}
 
