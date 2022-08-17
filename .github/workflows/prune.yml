@@ -1,0 +1,26 @@
+auto-pruning:
+  name: auto delete any binaries older
+  on:
+    schedule:
+      -cron: "0 * * * *"
+
+  jobs:
+    pruner:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+
+        - name: Switch bin branch
+          run: |
+            git config --global user.name github-actions && git config --global user.email github-actions@github.com
+            git pull origin bin --rebase && git switch bin
+
+        - name: Run bin-prune.py
+          run: python3 bin-prune.py
+
+        - name: Push changes
+          run: |
+            git add -A
+            git commit -m 'auto delete old binary'
+            git push origin bin
+
