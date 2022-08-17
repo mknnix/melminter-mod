@@ -1,0 +1,34 @@
+# https://github.com/OSSystems/rust-cross-images/blob/master/Dockerfile.aarch64-unknown-linux-gnu-libarchive
+
+FROM rustembedded/cross:aarch64-unknown-linux-gnu-0.2.1
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install -t xenial --assume-yes --no-install-recommends \
+    libarchive-dev:arm64 \
+    libicu-dev:arm64 \
+    nettle-dev:arm64 \
+    libacl1-dev:arm64 \
+    liblzma-dev:arm64 \
+    libzstd-dev:arm64 \
+    liblz4-dev:arm64 \
+    libbz2-dev:arm64 \
+    zlib1g-dev:arm64 \
+    libxml2-dev:arm64
+
+COPY openssl-1.1.sh /
+RUN /openssl-1.1.sh linux-aarch64 aarch64-linux-gnu-
+
+ENV PKG_CONFIG_ALLOW_CROSS 1
+ENV PKG_CONFIG_PATH /usr/lib/aarch64-linux-gnu/pkgconfig/
+
+# OpenSSL linking
+ENV OPENSSL_STATIC=1 \
+    OPENSSL_DIR=/openssl \
+    OPENSSL_INCLUDE_DIR=/openssl/include \
+    OPENSSL_LIB_DIR=/openssl/lib
+
+# Set the locale
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+

@@ -1,0 +1,3 @@
+[target.aarch64-unknown-linux-gnu]
+image = "ossystems/rust-cross:aarch64-unknown-linux-gnu-libarchive-0.2.1"
+
