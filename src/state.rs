@@ -27,7 +27,7 @@ pub struct MintState {
 
 #[derive(Copy, Clone, Debug)]
 struct FeeRecord {
-    f: u8, // F1/F2/F3... first for newcoin; second for doscMint; three for swap.
+    kind: TxKind, // TxKind::Normal for newcoin; TxKind::DoscMint for doscMint; TxKind::Swap for swap.
     time: SystemTime,
     balance: CoinValue,
     fee: CoinValue,
@@ -74,13 +74,7 @@ impl MintState {
         Ok( self.wallet.summary().await?.detailed_balance.get("6d").copied().unwrap_or(CoinValue(0)) )
     }
 
-    #[allow(non_snake_case)]
-    pub fn fee_failsafe(&self, max: Option<CoinValue>, quit: bool) {
-        // 0.02 MEL as the default max costs for minting...
-        let MAX_LOST = CoinValue::from_millions(1u8) / 50;
-        // override if given custom value.
-        let max_lost = if let Some(ml) = max { ml } else { MAX_LOST };
-
+    pub fn fee_failsafe(&self, max_lost: CoinValue, quit: bool) {
         let fh = self.fee_history.clone();
         log::debug!("(fee-safe) our balance history: {:?}", fh);
 
@@ -90,18 +84,29 @@ impl MintState {
         }
 
         let mut lost_coins = CoinValue(0);
-        for it in &fh {
-            assert!(it.time < SystemTime::now());
-            assert!(it.f >= 1 && it.f <= 3);
+        for i in 0 .. fh_len {
+            let it = fh[i];
+            assert!( it.time < SystemTime::now() );
+            assert!( it.kind == TxKind::Normal || it.kind == TxKind::DoscMint || it.kind == TxKind::Swap );
+            
+            if i > 0 {
+                let prev = fh[i-1];
+                assert!( prev.time < it.time );
+            }
 
             // skip any newcoin tx(s)
-            if it.f == 1 { continue; }
+            if it.kind == TxKind::Normal { continue; }
 
+            // calculate the profits
             let profits: i128 = (it.income.0 as i128) - (it.fee.0 as i128);
+            // ignore this scenario of no-profit and no-lost
             if profits == 0 { continue; }
 
+            // negative-profits!!
             if profits < 0 {
                 lost_coins += CoinValue((-profits) as u128);
+
+            // good, we have a positive profit margin.
             } else if lost_coins > CoinValue(0) {
                 let p = CoinValue(profits as u128);
                 if lost_coins <= p {
@@ -112,13 +117,16 @@ impl MintState {
             }
         }
 
+        // if there is any balance lost, then warnings will be given in any case.
         if lost_coins > CoinValue(0) {
             let first = fh[0];
             let last = fh[fh_len - 1];
             log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time), first.balance, last.balance, first.balance - last.balance);
         }
 
+        // if the loss exceeds the tolerable limit:
         if lost_coins >= max_lost {
+            // then, terminate this process if allowed to stop minting.
             if quit {
                 panic_exit!(91, "melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your coins!", lost_coins, max_lost);
             }
@@ -170,7 +178,7 @@ impl MintState {
 
             log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.fee_history.push(FeeRecord{
-                f: 1,
+                kind: TxKind::Normal,
                 time: SystemTime::now(),
                 balance: self.get_balance().await?,
                 fee: fees,
@@ -301,7 +309,7 @@ impl MintState {
 
         log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
         self.fee_history.push(FeeRecord{
-            f: 2,
+            kind: TxKind::DoscMint,
             time: SystemTime::now(),
             balance: self.get_balance().await?,
             fee: fees,
@@ -361,7 +369,7 @@ impl MintState {
 
         log::debug!("(fee-safe) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.fee_history.push(FeeRecord{
-            f: 3,
+            kind: TxKind::Swap,
             time: SystemTime::now(),
             balance: self.get_balance().await?,
             fee: fees,

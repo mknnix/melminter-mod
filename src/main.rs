@@ -43,6 +43,10 @@ fn main() -> surf::Result<()> {
         lb.init();
     }
 
+    if opts.daemon != opts.endpoint {
+        panic_exit!(2, "unexpected found two different values of option --daemon and --endpoint");
+    }
+
     smol::block_on(async move {
         // use the provided address of melwalletd daemon, and auto detect network type.
         let daemon_addr = opts.daemon;
@@ -122,7 +126,7 @@ fn main() -> surf::Result<()> {
         let worker = Worker::start(WorkerConfig {
             wallet: worker_wallet,
             payout: opts.payout,
-            connect: themelio_bootstrap::bootstrap_routes(network_id)[0],
+            connect: if let Some(bootstrap) = opts.bootstrap { bootstrap } else { themelio_bootstrap::bootstrap_routes(network_id)[0] },
             netid: network_id,
             //name: "".into(),
             tree: dash_root.clone(),

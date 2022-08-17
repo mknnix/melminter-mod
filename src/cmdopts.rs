@@ -9,6 +9,13 @@ pub struct CmdOpts {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// Wallet API endpoint (daemon address of melwalletd)
     pub daemon: SocketAddr,
+    #[structopt(long, default_value = "127.0.0.1:11773")]
+    /// Alias to --daemon
+    pub endpoint: SocketAddr,
+
+    #[structopt(long)]
+    /// set the bootstrap node address, otherwise defaults to {network}-bootstrap.themelio.org
+    pub bootstrap: Option<SocketAddr>,
 
     #[structopt(long, default_value = "__melminter_")]
     /// Prefixes for the "owned" wallets created by the melminter.
@@ -32,9 +39,9 @@ pub struct CmdOpts {
     /// Whether the negative-profit failsafe check should be disabled? (use for debugging only)
     pub disable_profit_failsafe: bool,
 
-    #[structopt(long)]
-    /// Manual specify a "max lost" coins for balance safe, or defaults to 0.02 (unit: MEL, for example 0.0321)
-    pub balance_max_losts: Option<String>,
+    #[structopt(long, default_value = "0.025")]
+    /// Specify a "max lost" coins for balance safe (unit: MEL, for example 0.0321)
+    pub balance_max_losts: String,
 
     #[structopt(long)]
     /// Whether enable debug output

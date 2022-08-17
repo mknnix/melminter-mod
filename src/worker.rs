@@ -74,7 +74,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
         let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
         let quit_without_profit = ! cli_opts.disable_profit_failsafe;
-        let max_losts = if let Some(v) = cli_opts.balance_max_losts { Some(v.parse().unwrap()) } else { None };
+        let max_losts: CoinValue = cli_opts.balance_max_losts.parse().unwrap();
 
         loop {
             // check profit status, and/or quitting without incomes
