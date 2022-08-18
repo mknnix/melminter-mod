@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::time::{SystemTime, Duration};
+use std::collections::HashMap;
 
 use anyhow::Context;
 use melwallet_client::WalletClient;
@@ -20,6 +21,8 @@ pub struct MintState {
 
     // expire time of each seeds, all expired coins will be ignored.
     seed_ttl: Option<u64>,
+    // here store all expired seeds
+    seed_expired: HashMap<CoinID, CoinData>,
 
     // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
     fee_history: Vec<FeeRecord>,
@@ -45,8 +48,8 @@ impl MintState {
         Self {
             wallet,
             client,
-            seed_ttl: None,
-            fee_history: vec![]
+            seed_ttl: None, seed_expired: HashMap::new(),
+            fee_history: vec![],
         }
     }
 
@@ -153,28 +156,35 @@ impl MintState {
             if toret.len() >= threads {
                 return Ok(());
             }
+
             // generate a bunch of custom-token utxos
-            let tx = self
-                .wallet
-                .prepare_transaction(
-                    TxKind::Normal,
-                    vec![],
-                    std::iter::repeat_with(|| CoinData {
-                        covhash: my_address,
-                        denom: Denom::NewCoin,
-                        value: CoinValue(1),
-                        additional_data: vec![],
-                    })
-                    .take(threads)
-                    .collect(),
-                    vec![],
-                    vec![],
-                    vec![],
-                )
-                .await?;
+            let mut outputs: Vec<CoinData> = std::iter::repeat_with(|| CoinData {
+                covhash: my_address,
+                denom: Denom::NewCoin,
+                value: CoinValue(1),
+                additional_data: vec![],
+            }).take(threads).collect();
+            for (exp_id, exp_data) in &self.seed_expired {
+                log::debug!("sweep all expired new-coin(s): id={:?}, data={:?}", exp_id, exp_data);
+                outputs.push(CoinData {
+                    covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
+                    denom: exp_data.denom,
+                    value: CoinValue(1),
+                    additional_data: vec![],
+                });
+            }
+            let tx = self.wallet.prepare_transaction(
+                TxKind::Normal,
+                vec![],
+                outputs,
+                vec![],
+                vec![],
+                vec![],
+            ).await?;
 
             let fees = tx.fee;
             let sent_hash = self.wallet.send_tx(tx).await?;
+            self.seed_expired.clear();
 
             log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.fee_history.push(FeeRecord{
@@ -189,12 +199,13 @@ impl MintState {
         }
     }
 
-    async fn get_seeds_raw(&self) -> surf::Result<Vec<CoinID>> {
+    async fn get_seeds_raw(&mut self) -> surf::Result<Vec<CoinID>> {
         let unspent_coins = self.wallet.get_coins().await?;
         let current_height = self.client.snapshot().await?.current_header().height.0;
 
         let mut seeds = vec![];
         for (id, data) in unspent_coins {
+//            println!("{:?}", (&id,&data));
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
                 if let Some(ttl) = self.seed_ttl {
@@ -207,7 +218,8 @@ impl MintState {
                     };
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
-                        log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (id,data));
+                        log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
+                        self.seed_expired.insert(id, data);
                         continue;
                     }
                 }
@@ -226,7 +238,9 @@ impl MintState {
         on_progress: impl Fn(usize, f64) + Sync + Send + 'static,
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
-        let seeds = self.get_seeds_raw().await?;
+        // we do not need to save the expired seeds, so just clone
+        let seeds = self.clone().get_seeds_raw().await?;
+
         let on_progress = Arc::new(on_progress);
         let mut proofs = Vec::new();
         for (idx, seed) in seeds.iter().copied().take(threads).enumerate() {
