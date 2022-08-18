@@ -316,12 +316,13 @@ impl MintState {
         let fees = tx.fee;
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
-            log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
+            log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to approx-income({} MEL) amount!! you should check your difficulty or a network issue.", fees, mels);
+            return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
         }
 
         let txhash = self.wallet.send_tx(tx).await?;
-
         log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
+
         self.fee_history.push(FeeRecord{
             kind: TxKind::DoscMint,
             time: SystemTime::now(),
@@ -329,7 +330,6 @@ impl MintState {
             fee: fees,
             income: mels,
         });
-
         Ok(txhash)
     }
 
@@ -377,6 +377,7 @@ impl MintState {
         let mels = self.erg_to_mel(doscs).await?;
         if fees >= mels {
             log::warn!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
+            return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
         }
 
         let txhash = self.wallet.send_tx(tx).await?;
