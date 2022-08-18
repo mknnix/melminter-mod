@@ -1,4 +1,5 @@
-use std::{ future::Future, time::Duration };
+use std::{ future::Future, time::Duration, net::SocketAddr };
+use std::io::Write;
 
 use anyhow::Context;
 use cmdopts::CmdOpts;
@@ -18,8 +19,6 @@ mod worker;
 use crate::worker::{Worker, WorkerConfig};
 
 fn main() -> surf::Result<()> {
-    use std::io::Write;
-
     let dash_root = Tree::default();
     let dash_options = line::Options {
         keep_running_if_progress_is_empty: true,
@@ -43,26 +42,34 @@ fn main() -> surf::Result<()> {
         lb.init();
     }
 
-    if opts.daemon != opts.endpoint {
-        panic_exit!(2, "unexpected found two different values of option --daemon and --endpoint");
+    if opts.daemon.is_some() && opts.endpoint.is_some() {
+        panic_exit!(2, "unexpected found both option --daemon and --endpoint given");
     }
 
-    smol::block_on(async move {
-        // use the provided address of melwalletd daemon, and auto detect network type.
-        let daemon_addr = opts.daemon;
+    let melwalletd_addr: SocketAddr =
+        if let Some(addr) = opts.daemon {
+            addr
+        } else if let Some(addr) = opts.endpoint {
+            addr
+        } else {
+            "127.0.0.1:11773".parse().unwrap()
+        };
 
+    smol::block_on(async move {
         // print version and daemon address
         print!("{} v{} ({}) / connect to melwalletd endpoint {} (",
-               env!("CARGO_PKG_NAME"),
-               env!("CARGO_PKG_VERSION"), env!("GIT_COMMIT_HASH"),
-               daemon_addr
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"), env!("GIT_COMMIT_HASH"),
+            melwalletd_addr
         ); std::io::stdout().flush()?;
 
-        let daemon = DaemonClient::new(daemon_addr);
+        // use the provided address of melwalletd daemon, and auto detect network type.
+        let daemon = DaemonClient::new(melwalletd_addr);
 
-        // For latest version of melwalletd, the HTTP API "/summary?testnet=1" does not works anymore (melwalletd no longer connect both mainnet & testnet, must use option "--network" select one)
+        // For latest version of melwalletd, the HTTP API "/summary?testnet=1" does not works anymore
+        //                   (melwalletd no longer connect both mainnet & testnet, must use option "--network" select one or defaults to "mainnet")
         // melwalletd no longer returns a different result based on "/summary?testnet=1" (it always depends on the value specified by "--network")
-        // So just need to get the returned result to determine which network type.
+        //                   So just need to get the returned result to determine which network type.
         let network_id: NetID = daemon.get_summary(false).await?.network;
 
         // println network id

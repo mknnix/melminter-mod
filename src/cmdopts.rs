@@ -6,12 +6,12 @@ use themelio_structs::Address;
 
 #[derive(Debug, StructOpt, Clone)]
 pub struct CmdOpts {
-    #[structopt(long, default_value = "127.0.0.1:11773")]
-    /// Wallet API endpoint (daemon address of melwalletd)
-    pub daemon: SocketAddr,
-    #[structopt(long, default_value = "127.0.0.1:11773")]
+    #[structopt(long)]
+    /// Wallet API endpoint (daemon address of melwalletd) [default value: 127.0.0.1:11773]
+    pub daemon: Option<SocketAddr>,
+    #[structopt(long)]
     /// Alias to --daemon
-    pub endpoint: SocketAddr,
+    pub endpoint: Option<SocketAddr>,
 
     #[structopt(long)]
     /// set the bootstrap node address, otherwise defaults to {network}-bootstrap.themelio.org
