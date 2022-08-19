@@ -20,7 +20,7 @@ pub struct MintState {
     // expire time of each seeds, all expired coins will be ignored.
     seed_ttl: Option<u64>,
     // here store all expired seeds
-    seed_expired: HashMap<CoinID, Vec<CoinData>>,
+    seed_expired: HashMap<TxHash, Vec<(CoinID, CoinData)>>,
     // what address to receive expired seeds
     covnull: Option<Address>,
 
@@ -168,20 +168,21 @@ impl MintState {
 
             // sweep all expired seeds
             let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
-            for (exp_id, exp_datas) in &self.seed_expired {
-                log::debug!("sweep all expired new-coin(s): id={:?}, data={:?}", exp_id, exp_datas);
-                assert!( exp_datas.len() > 0 );
+            for (exp_th, exp_vals) in &self.seed_expired {
+                log::debug!("sweep all expired new-coin(s): hash={:?}, values={:?}", exp_th, exp_vals);
+                assert!( exp_vals.len() > 0 );
+                let (_exp_id, exp_data) = exp_vals[0].clone();
 
-                let denom = exp_datas[0].denom;
-                for it in exp_datas {
-                    assert!( it.denom == denom );
+                let denom = exp_data.denom;
+                for it in exp_vals {
+                    assert!( it.1.denom == denom );
                 }
 
                 outputs.push(CoinData {
                     covhash: exp_dst,
                     //covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
-                    denom: denom,
-                    value: CoinValue( exp_datas.len() as u128 ),
+                    denom,
+                    value: CoinValue( exp_vals.len() as u128 ),
                     additional_data: vec![],
                 });
             }
@@ -232,15 +233,18 @@ impl MintState {
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
                         log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
-                        let v: &mut Vec<CoinData> =
+
+                        let th = id.txhash;
+                        let v: &mut Vec<(CoinID, CoinData)> =
                             // get it directly if it exists. otherwise create a new Vec and return it
-                            if let Some(v) = self.seed_expired.get_mut(&id) {
+                            if let Some(v) = self.seed_expired.get_mut(&th) {
                                 v
                             } else {
-                                self.seed_expired.insert(id, vec![]);
-                                self.seed_expired.get_mut(&id).unwrap()
+                                self.seed_expired.insert(th, vec![]);
+                                self.seed_expired.get_mut(&th).unwrap()
                             };
-                        v.push(data);
+
+                        v.push((id, data));
                         continue;
                     }
                 }
