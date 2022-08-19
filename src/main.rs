@@ -170,7 +170,7 @@ macro_rules! panic_exit {
     };
 }
 
-// Repeats something until it stops failing
+/// Repeats something until it stops failing
 async fn repeat_fallible<T, E: std::fmt::Debug, F: Future<Output = Result<T, E>>>(
     mut clos: impl FnMut() -> F,
 ) -> T {
@@ -182,3 +182,37 @@ async fn repeat_fallible<T, E: std::fmt::Debug, F: Future<Output = Result<T, E>>
         smol::Timer::after(Duration::from_secs(1)).await;
     }
 }
+
+/// Generate a new owner-less address. any coins that are sent to such addresses are considered lost forever, "the dead end of blockchain"
+pub fn new_void_address() -> themelio_structs::Address {
+    themelio_stf::melvm::Covenant::std_ed25519_pk_new(
+        tmelcrypt::ed25519_keygen().1
+            .to_public()
+    ).hash()
+}
+
+/// the "/dev/null" of blockchain...
+pub fn new_null_dst() -> themelio_structs::Address {
+    let mut a;
+    loop {
+        a = new_void_address();
+        if format!("{}", a).starts_with("t0000") {
+            return a;
+        }
+    }
+}
+
+#[test]
+fn nva_test() {
+    for i in 0..100000 {
+    println!("VA-{}: {}", i+1, new_void_address());
+    }
+}
+
+#[test]
+fn nnd_test() {
+    for i in 0..10 {
+        println!("null[{}] {}", i+1, new_null_dst());
+    }
+}
+

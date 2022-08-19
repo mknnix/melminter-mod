@@ -8,11 +8,9 @@ use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use themelio_nodeprot::ValClient;
 use themelio_stf::Tip910MelPowHash;
-use themelio_structs::{
-    CoinData, CoinDataHeight, CoinID, CoinValue, Denom, PoolKey, TxHash, TxKind,
-};
+use themelio_structs::{CoinData, CoinDataHeight, CoinID, CoinValue, Denom, PoolKey, TxHash, TxKind, Address};
 
-use crate::{repeat_fallible, panic_exit};
+use crate::{repeat_fallible, panic_exit, new_void_address, new_null_dst};
 
 #[derive(Clone)]
 pub struct MintState {
@@ -23,6 +21,8 @@ pub struct MintState {
     seed_ttl: Option<u64>,
     // here store all expired seeds
     seed_expired: HashMap<CoinID, Vec<CoinData>>,
+    // what address to receive expired seeds
+    covnull: Option<Address>,
 
     // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
     fee_history: Vec<FeeRecord>,
@@ -49,6 +49,7 @@ impl MintState {
             wallet,
             client,
             seed_ttl: None, seed_expired: HashMap::new(),
+            covnull: Some( new_null_dst() ),
             fee_history: vec![],
         }
     }
@@ -164,6 +165,9 @@ impl MintState {
                 value: CoinValue(1),
                 additional_data: vec![],
             }).take(threads).collect();
+
+            // sweep all expired seeds
+            let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
             for (exp_id, exp_datas) in &self.seed_expired {
                 log::debug!("sweep all expired new-coin(s): id={:?}, data={:?}", exp_id, exp_datas);
                 assert!( exp_datas.len() > 0 );
@@ -174,12 +178,15 @@ impl MintState {
                 }
 
                 outputs.push(CoinData {
-                    covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
+                    covhash: exp_dst,
+                    //covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
                     denom: denom,
                     value: CoinValue( exp_datas.len() as u128 ),
                     additional_data: vec![],
                 });
             }
+
+            // prepare tx...
             let tx = self.wallet.prepare_transaction(
                 TxKind::Normal,
                 vec![],
