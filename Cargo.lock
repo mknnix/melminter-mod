@@ -643,9 +643,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59a6001667ab124aebae2a495118e11d30984c3a653e99d86d58971708cf5e4b"
+checksum = "1079fb8528d9f9c888b1e8aa651e6e079ade467323d58f75faf1d30b1808f540"
 dependencies = [
  "libc",
 ]
@@ -1585,7 +1585,7 @@ checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
 name = "melminter-mod"
-version = "0.8.6"
+version = "0.8.6-alpha0"
 dependencies = [
  "anyhow",
  "ctrlc",
@@ -1604,7 +1604,7 @@ dependencies = [
  "surf",
  "themelio-bootstrap",
  "themelio-nodeprot",
- "themelio-stf 0.11.9",
+ "themelio-stf 0.11.10",
  "themelio-structs",
  "tmelcrypt",
 ]
@@ -3052,9 +3052,9 @@ dependencies = [
 
 [[package]]
 name = "themelio-stf"
-version = "0.11.9"
+version = "0.11.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a67cba79ab8a1300b7586655e0228a1e7bb05d3019b7ac53d7057cdfc6f98266"
+checksum = "3bd199da4dc5d120108b4f7aeafde278ef460d724bcf95e3bdd30ee282ac880e"
 dependencies = [
  "arbitrary",
  "assoc",
