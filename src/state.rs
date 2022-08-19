@@ -22,7 +22,7 @@ pub struct MintState {
     // expire time of each seeds, all expired coins will be ignored.
     seed_ttl: Option<u64>,
     // here store all expired seeds
-    seed_expired: HashMap<CoinID, CoinData>,
+    seed_expired: HashMap<CoinID, Vec<CoinData>>,
 
     // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
     fee_history: Vec<FeeRecord>,
@@ -164,12 +164,19 @@ impl MintState {
                 value: CoinValue(1),
                 additional_data: vec![],
             }).take(threads).collect();
-            for (exp_id, exp_data) in &self.seed_expired {
-                log::debug!("sweep all expired new-coin(s): id={:?}, data={:?}", exp_id, exp_data);
+            for (exp_id, exp_datas) in &self.seed_expired {
+                log::debug!("sweep all expired new-coin(s): id={:?}, data={:?}", exp_id, exp_datas);
+                assert!( exp_datas.len() > 0 );
+
+                let denom = exp_datas[0].denom;
+                for it in exp_datas {
+                    assert!( it.denom == denom );
+                }
+
                 outputs.push(CoinData {
                     covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
-                    denom: exp_data.denom,
-                    value: CoinValue(1),
+                    denom: denom,
+                    value: CoinValue( exp_datas.len() as u128 ),
                     additional_data: vec![],
                 });
             }
@@ -205,7 +212,6 @@ impl MintState {
 
         let mut seeds = vec![];
         for (id, data) in unspent_coins {
-//            println!("{:?}", (&id,&data));
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
                 if let Some(ttl) = self.seed_ttl {
@@ -219,7 +225,15 @@ impl MintState {
                     assert!(coin_height <= current_height);
                     if (current_height - coin_height) > ttl {
                         log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
-                        self.seed_expired.insert(id, data);
+                        let v: &mut Vec<CoinData> =
+                            // get it directly if it exists. otherwise create a new Vec and return it
+                            if let Some(v) = self.seed_expired.get_mut(&id) {
+                                v
+                            } else {
+                                self.seed_expired.insert(id, vec![]);
+                                self.seed_expired.get_mut(&id).unwrap()
+                            };
+                        v.push(data);
                         continue;
                     }
                 }
