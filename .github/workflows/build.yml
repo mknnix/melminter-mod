@@ -18,7 +18,7 @@ jobs:
       - name: Create binary directory for this job
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
-          git switch --orphan bin && git pull origin bin --rebase
+          git switch --orphan bin && git pull origin bin
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
@@ -183,7 +183,7 @@ jobs:
       - name: Create binary directory for this job
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
-          git switch --orphan bin && git pull origin bin --rebase
+          git switch --orphan bin && git pull origin bin
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
@@ -219,7 +219,7 @@ jobs:
       - name: Create binary directory for this job
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
-          git switch --orphan bin && git pull origin bin --rebase
+          git switch --orphan bin && git pull origin bin
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
@@ -259,7 +259,7 @@ jobs:
         run: |
           git config --global user.name github-actions
           git config --global user.email github-actions@github.com
-          git switch --orphan bin && git pull origin bin --rebase
+          git switch --orphan bin && git pull origin bin
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
@@ -294,7 +294,7 @@ jobs:
       - name: Create binary directory for this job
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
-          git switch --orphan bin && git pull origin bin --rebase
+          git switch --orphan bin && git pull origin bin
           git switch bin
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
