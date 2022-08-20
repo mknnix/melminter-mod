@@ -30,6 +30,14 @@ curl https://scan.themelio.org/raw/blocks/1403000/37930e97c3b935f1aabcfc89fe0335
 2. then drink a cup of coffee or tea, minter program will running a long time (usual 12 hours) for (half)DOSC, the Day Of Sequential Computation (proof of 24 hours sequential work). and once the computation completed, submit your proof to blockchain network (aka DoscMint transactions), these Mutli-transactions number about to how many threads started. so it will generate `N` transactions for each thread to proof it's work. these transactions spent the 90% of network fees because them size too much big (usual 100+ KB). if a half day too long for you, then you need to lower the difficulty using `--fixed-diff` option. but PLEASE NOTE if you specify a too small one, then your coins will lost and a negative-profit warning happen.
 3. and wait one minute, you should get a lot of ERG, a temporary assets it means how many works finish. then the end, initial a mel-swap for converting your all ERG to MEL (the stablecoin of themelio). how many MEL you got? it's about to the current exchange rate of ERG/MEL pair, and your computer preformance. for right now (2022-07-30), `1 MEL = 2.5233 ERG`... you can looks the rate use `melwallet-cli pool ERG/MEL` or visit explorer: https://scan.themelio.org
 
+#### network fee changes, maybe a current event of this blockchain
+
+![](https://github.com/mknnix/melminter-mod/raw/static/static/event/no-any-cannot-to-submit-proof-without-high-fee.png)
+https://github.com/mknnix/melminter-mod/blob/static/static/event/no-any-cannot-to-submit-proof-without-high-fee.txt
+![](https://github.com/mknnix/melminter-mod/raw/static/static/event/is-themelio-banned-civilian-to-mint_why.png)
+
+### images?
+
 ![](https://github.com/mknnix/melminter-mod/raw/static/static/img/0723__melminter_my-modified_demo.png)
 
 ![](https://github.com/mknnix/melminter-mod/raw/static/static/img/0724__melminter__percentage_demo.png)

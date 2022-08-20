@@ -219,7 +219,7 @@ fn nva_test() {
     }
 }
 
-#[test]
+//#[test]
 fn nnd_test() {
     for i in 0..10 {
         println!("null[{}] {}", i+1, new_null_dst());
