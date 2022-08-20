@@ -14,7 +14,7 @@ jobs:
       - name: Switch bin branch
         run: |
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
-          git pull origin bin --rebase && git switch bin
+          git switch --orphan bin && git pull origin bin
           tar vvcf /tmp/git-branch-bin-newest-commit.tar bin/ .gitignore *.py
           git switch --orphan bin1
           tar vvxf /tmp/git-branch-bin-newest-commit.tar
@@ -28,4 +28,6 @@ jobs:
         run: |
           git add -A
           git commit -m 'auto delete old binary'
+          git branch -D bin
+          git branch -M bin1 bin
           git push origin bin -f
