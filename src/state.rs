@@ -159,17 +159,19 @@ impl MintState {
             }
 
             // generate a bunch of custom-token utxos
-            let mut outputs: Vec<CoinData> = std::iter::repeat_with(|| CoinData {
-                covhash: my_address,
-                denom: Denom::NewCoin,
-                value: CoinValue(1),
-                additional_data: vec![],
-            }).take(threads).collect();
+            let mut outputs: Vec<CoinData> = vec![
+                CoinData {
+                    covhash: my_address,
+                    denom: Denom::NewCoin,
+                    value: CoinValue( threads as u128 ),
+                    additional_data: vec![],
+                }
+            ];
 
             // sweep all expired seeds
             let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
             for (exp_th, exp_vals) in &self.seed_expired {
-                log::debug!("sweep all expired new-coin(s): hash={:?}, values={:?}", exp_th, exp_vals);
+                log::debug!("sweep all expired new-coin(s): tx-hash={:?}, values={:?}", exp_th, exp_vals);
                 assert!( exp_vals.len() > 0 );
                 let (_exp_id, exp_data) = exp_vals[0].clone();
 
@@ -263,19 +265,22 @@ impl MintState {
         on_progress: impl Fn(usize, f64) + Sync + Send + 'static,
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
+        use thread_priority::{ set_current_thread_priority, ThreadPriority };
+
         // we do not need to save the expired seeds, so just clone
         let seeds = self.clone().get_seeds_raw().await?;
 
         let on_progress = Arc::new(on_progress);
-        let mut proofs = Vec::new();
+        let mut proof_thrs = Vec::new();
         for (idx, seed) in seeds.iter().copied().take(threads).enumerate() {
-            let tip_cdh =
-                repeat_fallible(|| async { self.client.snapshot().await?.get_coin(seed).await })
-                    .await
-                    .context("transaction's input spent from behind our back")?;
-            // log::debug!("tip_cdh = {:#?}", tip_cdh);
+            let tip_cdh = repeat_fallible(|| async { self.client.snapshot().await?.get_coin(seed).await })
+                            .await.context("transaction's input spent from behind our back")?;
+
+            log::debug!("tip_cdh = {:#?}", tip_cdh);
+
             let snapshot = self.client.snapshot().await?;
-            // log::debug!("snapshot height = {}", snapshot.current_header().height);
+            log::debug!("snapshot header = {:?}", snapshot.current_header());
+
             let tip_header_hash = repeat_fallible(|| snapshot.get_older(tip_cdh.height))
                 .await
                 .current_header()
@@ -284,8 +289,11 @@ impl MintState {
             let on_progress = on_progress.clone();
             // let core_ids = core_affinity::get_core_ids().unwrap();
             // let core_id = core_ids[idx % core_ids.len()];
+            /*
             let proof_fut = std::thread::spawn(move || {
                 // core_affinity::set_for_current(core_id);
+                set_current_thread_priority(ThreadPriority::Min);
+
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
@@ -300,10 +308,34 @@ impl MintState {
                     ),
                 )
             });
-            proofs.push(proof_fut);
+            */
+            let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
+                .name( format!("Minting-{}", idx) )
+                .priority(ThreadPriority::Min)
+                .spawn(move |nice_result| {
+                    // logging the result of thread nice set...
+                    log::info!("Minting thread ({}) set Minimum priority: result {:?}", idx, nice_result);
+
+                    (
+                        tip_cdh,
+                        melpow::Proof::generate_with_progress(
+                            &chi,
+                            difficulty,
+                            |progress| {
+                                if fastrand::f64() < 0.1 {
+                                    on_progress(idx, progress)
+                                }
+                            },
+                            Tip910MelPowHash,
+                        ),
+                    )
+                })?;
+
+            proof_thrs.push(proof_fut);
         }
+
         let mut out = vec![];
-        for (seed, proof) in seeds.into_iter().zip(proofs.into_iter()) {
+        for (seed, proof) in seeds.into_iter().zip(proof_thrs.into_iter()) {
             let result = smol::unblock(move || proof.join().unwrap()).await;
             out.push((seed, result.0, result.1.to_bytes()))
         }
@@ -342,7 +374,9 @@ impl MintState {
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
             log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to approx-income({} MEL) amount!! you should check your difficulty or a network issue.", fees, mels);
-            return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
+            if fees > mels {
+                return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
+            }
         }
 
         let txhash = self.wallet.send_tx(tx).await?;
@@ -402,7 +436,9 @@ impl MintState {
         let mels = self.erg_to_mel(doscs).await?;
         if fees >= mels {
             log::warn!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
-            return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
+            if fees > mels {
+                return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
+            }
         }
 
         let txhash = self.wallet.send_tx(tx).await?;

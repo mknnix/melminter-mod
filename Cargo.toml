@@ -1,6 +1,6 @@
 [package]
 name = "melminter-mod"
-version = "0.8.6-alpha1"
+version = "0.8.6-alpha2"
 authors = ["nullchinchilla <nullchinchilla@pm.me>", "mkn <email@please.see.git.commit>"]
 edition = "2021"
 
@@ -38,4 +38,6 @@ env_logger = "0.9.0"
 melpow = "0.1.1"
 # melpow = { git="https://github.com/mknnix/melpow" }
 ctrlc = "3.2.2"
+
+thread-priority = "0.8.2"
 
