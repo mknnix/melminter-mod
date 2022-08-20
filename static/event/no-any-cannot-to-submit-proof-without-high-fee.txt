@@ -1,0 +1,44 @@
+// TXT Encoded UTF-8
+
+Aug 20, 2022 (Sat)
+
+This high-fees event is a tiny watershed for every blockchain community, and possible to be a mass-change of their supporters. One side of the community believes that the how much fee is fine, while the other side believes that the fee is a basic livelihood issue that affects the cost and difficulty of daily use.
+
+BTC (bitcoin) v. BCH (bitcoin cash); one side believes that the fee is not a issue and promotes the interests of the block generators to make them richer while others got their wealth taken away [BTC]; and the other side is more concerned about the convenience or "pro-community/users degree?" for the daily use of the blockchain. 
+So the original blockchain created by Satoshi Nakamoto was then split in two, with two forks existing parallel (and of course many other forks). as a result of this event, using segwit-like technology to avoid large tx fees while increasing the block size [BCH]. Both parties received enough support to operate until now.
+
+it is not certain that other blockchains such as themelio are similar to this situation, but it is certain that if the event is not handled be carefully, the community will be dissatisfied/controversial and eventually there may be a forking for a new chain (depending on the level of support from the other side). At the same time, there is also a large of people watching the show? 
+
+A point of view is that, themelio has dynamic block sizes, while the current mainnet is in beta/alpha stage, as the stakers are not open to anyone, and current the initial development team is (exclusive?) control, in order to reduce the running costs of their staker nodes and had to do so. Therefore, waiting for next development makes public to join the "stakers-team" at later, there may be a turnaround, because the fee-rate is voted by all stakers together, and the fee rate level can be intervened by introducing stakers from other parties.
+
+Finally, is it possible to improve the technology (compression; prune; and bulletproofs/segwit-like) to reduce the data sizes and eventually makes a low-fee?
+
+Perhaps the storage cost and staker node, may can be separated and/or shared?
+Plan A: all stakers common store a part of shared data (every become a pruned node);
+Plan B: eliminates the require of stakers to store all blocks (or can run stakers on pruned database, or even just headers/without data holding), then pass the cost to auditors in any case;
+Plan C: uses various P2P technologies to store blockchain data across various types of file-sharing networks (exists and self-developing things);
+Plan D: various "cloud service platforms" to join the blockchain/file-sharing network nodes to store data together and distribute it quickly? (may this also a method of donate to network? hahaha)
+
+Or maybe there will be a spontaneous-change as more stakers join in the future (the result for better or for worse, of course unsure)?
+
+==============================================================================
+
+2022年 八月 20日 (週六)
+
+這次高手續費事件算是每個社區的小分水嶺吧? 一派認爲手續費無所謂，另外一個支系認爲手續費是最基本的民生問題 關乎日常使用的成本和難度.
+
+BTC (bitcoin) v. BCH (bitcoin cash)；一邊認爲手續費沒問題而且促進區塊產生者的利益讓他們變得更富然後另外其他人的財富大多被拿走了 [BTC]；以及另外一方則是更關心區塊鏈日常使用方面的便利性 和 "親民程度?" 因此使用類似 segwit 的技術避免大量手續費，同時增加塊大小 [BCH].
+然後因這一事件 這個中本聰創造的區塊鏈被一分爲二，兩個分叉並行存在（當然也有許多另外分叉）。兩方都獲得了足夠的支持，一直運作至今。
+
+而無法確定themelio等其他區塊鏈是否類似於這種情況，但可以確定的是：如果事件不能得到很好的處理，社群會有不滿意、最終是否可能有分叉出新幣 就看另外一方的支持程度了。同時也有一大部分人圍觀 吃瓜看戲? 一個觀點是，themelio有動態塊大小，同時現今的 mainnet 處於 beta/alpha 階段，因爲 stakers 未開放，因此爲最初開發團隊所 (排他?) 控制，爲了減輕staker node的運行成本 而不得已如此。因此等待之後開發公衆加入 stakers 隊伍後，可能會有轉機，因爲 fee rate 是所有 stakers 一起投票得出的，通過引入其他方的 stakers 即可干預手續費費率級別。
+
+最後，是否改進技術(壓縮; prune; 及bulletproofs/segwit-like) 可縮小佔用空間最後手續費可降低一些？
+或許可以將儲存成本和 staker node 分離出來 各司其職 (and/or) 共同分擔?
+
+plan A: 所有 stakers 共同分擔成本；
+plan B: 免除 stakers 需儲存區塊的需求（或者可以在已修剪的數據庫上運行 staker, 甚至極端情況下根本不用儲存數據而只是區塊頭）, 以及需將成本轉嫁給 auditors;
+Plan C: 使用各種不同的 P2P 技術跨各類型網絡儲存區塊鏈數據... (使用已有技術或是自行開發)
+Plan D 加入各個 "cloud service platform" 和 各其他 區塊鏈/文件P2P 網絡節點  共同儲存數據 並協助快速分發）？
+
+或許今後更多 stakers 加入後自然而然會有變化? 結果是好或壞就沒人知道了
+
