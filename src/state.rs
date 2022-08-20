@@ -37,7 +37,7 @@ struct FeeRecord {
     income: CoinValue, // ERG(should be convert and store MEL) for doscMint, or MEL for swap. any newcoin tx should be always 0.
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct PrepareReq {
     signing_key: String,
     outputs: Vec<CoinData>,
@@ -148,7 +148,7 @@ impl MintState {
     }
 
     /// Generates a list of "seed" coins.
-    pub async fn generate_seeds(&mut self, threads: usize) -> surf::Result<()> {
+    pub async fn generate_seeds(&mut self, threads: usize, seed_bulk: bool) -> surf::Result<()> {
         self.unlock().await?;
 
         let my_address = self.wallet.summary().await?.address;
@@ -159,16 +159,25 @@ impl MintState {
             }
 
             // generate a bunch of custom-token utxos
-            let mut outputs: Vec<CoinData> = vec![
-                CoinData {
+            let mut outputs: Vec<CoinData> = if seed_bulk {
+                vec![
+                    CoinData {
+                        covhash: my_address,
+                        denom: Denom::NewCoin,
+                        value: CoinValue( threads as u128 ),
+                        additional_data: vec![],
+                    }
+                ]
+            } else {
+                std::iter::repeat_with(|| CoinData {
                     covhash: my_address,
                     denom: Denom::NewCoin,
-                    value: CoinValue( threads as u128 ),
+                    value: CoinValue(1),
                     additional_data: vec![],
-                }
-            ];
+                }).take(threads).collect()
+            };
 
-            // sweep all expired seeds
+            // sweep all expired seeds (always bulk)
             let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
             for (exp_th, exp_vals) in &self.seed_expired {
                 log::debug!("sweep all expired new-coin(s): tx-hash={:?}, values={:?}", exp_th, exp_vals);

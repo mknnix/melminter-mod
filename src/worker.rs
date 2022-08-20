@@ -75,6 +75,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
         let quit_without_profit = ! cli_opts.disable_profit_failsafe;
         let max_losts: CoinValue = cli_opts.balance_max_losts.parse().unwrap();
+        let bulk_seeds = cli_opts.bulk_seeds;
 
         loop {
             // check profit status, and/or quitting without incomes
@@ -181,7 +182,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .unwrap()
                     .add_child("generating seed UTXOs for minting...");
                 sub.init(None, None);
-                mint_state.generate_seeds(threads).await?;
+                mint_state.generate_seeds(threads, bulk_seeds).await?;
             }
 
             // repeat because wallet could be out of money

@@ -70,17 +70,27 @@ fn main() -> surf::Result<()> {
         //                   (melwalletd no longer connect both mainnet & testnet, must use option "--network" select one or defaults to "mainnet")
         // melwalletd no longer returns a different result based on "/summary?testnet=1" (it always depends on the value specified by "--network")
         //                   So just need to get the returned result to determine which network type.
-        let network_id: NetID = daemon.get_summary(false).await?.network;
+        let auto_netid: NetID = daemon.get_summary(false).await?.network;
+
+        let netid: NetID = if let Some(id) = opts.network {
+            if id != auto_netid {
+                log::error!("Warning: the network type you specified is Different to the network type of melwalletd reported! This program will wait 5 seconds to continue...");
+                smol::Timer::after(Duration::from_secs(5)).await;
+            }
+            id
+        } else {
+            auto_netid
+        };
 
         // println network id
-        println!("{})", network_id);
+        println!("{})", netid);
         println!("");
 
         // Is CustomXX also a kind of testnet ??
-        let is_testnet = network_id != NetID::Mainnet;
+        let is_testnet = netid != NetID::Mainnet;
 
         // generate wallet name for minting
-        let wallet_name = format!("{}{:?}", opts.wallet_prefix, network_id);
+        let wallet_name = format!("{}{:?}", opts.wallet_prefix, netid);
         // make sure the working-wallet exists
         let worker_wallet = match daemon.get_wallet(&wallet_name).await? {
             Some(wallet) => wallet,
@@ -133,8 +143,8 @@ fn main() -> surf::Result<()> {
         let worker = Worker::start(WorkerConfig {
             wallet: worker_wallet,
             payout: opts.payout,
-            connect: if let Some(bootstrap) = opts.bootstrap { bootstrap } else { themelio_bootstrap::bootstrap_routes(network_id)[0] },
-            netid: network_id,
+            connect: if let Some(bootstrap) = opts.bootstrap { bootstrap } else { themelio_bootstrap::bootstrap_routes(netid)[0] },
+            netid,
             //name: "".into(),
             tree: dash_root.clone(),
             threads: opts.threads.unwrap_or_else(num_cpus::get_physical),

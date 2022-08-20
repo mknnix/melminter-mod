@@ -1,11 +1,16 @@
 use std::net::SocketAddr;
 
 use structopt::StructOpt;
-use themelio_structs::Address;
+use themelio_structs::{ Address, NetID };
 // use tmelcrypt::Ed25519SK;
 
 #[derive(Debug, StructOpt, Clone)]
 pub struct CmdOpts {
+    #[structopt(long)]
+    /// Specify the network type, should be mainnet/testnet/custom-xxx. otherwise auto detect which network of connected melwalletd.
+    /// (NOTE: you should not manual control fixed network type instead of auto, unless for debug or experimental)
+    pub network: Option<NetID>,
+
     #[structopt(long)]
     /// Wallet API endpoint (daemon address of melwalletd) [default value: 127.0.0.1:11773]
     pub daemon: Option<SocketAddr>,
@@ -23,7 +28,7 @@ pub struct CmdOpts {
 
     #[structopt(long)]
     /// Payout address for melminter profits.
-    /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL.
+    /// the program will send you 0.5 MEL once the mint-wallet balance more than 1.0 MEL;
     /// otherwise will do nothing and display warning if you doesn't specify one.
     pub payout: Option<Address>,
 
@@ -54,10 +59,14 @@ pub struct CmdOpts {
 
     #[structopt(long)]
     /// Manual specify a fixed difficulty here, otherwise melminter will automatic to select one.
-    /// (PLEASE NOTE: this value should be chosen carefully!
-    /// if you enter a too small value, your incomes may not be cover the expenses,
-    /// because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
+    ///   (PLEASE NOTE: this value should be chosen carefully!
+    ///   if you enter a too small value, your incomes may not be cover the expenses,
+    ///   because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
     pub fixed_diff: Option<usize>,
+
+    #[structopt(long)]
+    /// [EXPERIMENTAL] Whether melminter should be bulk to sent new-coin seeds tx...
+    pub bulk_seeds: bool,
 
     // #[structopt(long)]
     // /// Drain the fee reserve at the start.
