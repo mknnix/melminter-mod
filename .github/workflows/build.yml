@@ -30,7 +30,7 @@ jobs:
 
       - name: Cross Build aarch64 android
         continue-on-error: true
-        run: cross build --release --target aarch64-linux-android --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target aarch64-linux-android --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.aarch64-android
@@ -51,7 +51,7 @@ jobs:
 
       - name: Cross Build x86 android (64-bit)
         continue-on-error: true
-        run: cross build --release --target x86_64-linux-android --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target x86_64-linux-android --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-android
@@ -72,7 +72,7 @@ jobs:
 
       - name: Cross Build aarch64 linux
         continue-on-error: true
-        run: cross build --release --target aarch64-unknown-linux-gnu --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target aarch64-unknown-linux-gnu --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.aarch64-linux
@@ -93,7 +93,7 @@ jobs:
 
       - name: Cross Build aarch64 linux (musl)
         continue-on-error: true
-        run: cross build --release --target aarch64-unknown-linux-musl --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target aarch64-unknown-linux-musl --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.aarch64-linux-musl
@@ -114,7 +114,7 @@ jobs:
 
       - name: Cross Build amd64 FreeBSD
         continue-on-error: true
-        run: cross build --release --target x86_64-unknown-freebsd --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target x86_64-unknown-freebsd --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-freebsd
@@ -135,7 +135,7 @@ jobs:
 
       - name: Cross Build amd64 NetBSD
         continue-on-error: true
-        run: cross build --release --target x86_64-unknown-netbsd --verbose
+        run: for i in {1..5};do echo try build $i; cross build --release --target x86_64-unknown-netbsd --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-netbsd
@@ -156,7 +156,7 @@ jobs:
 
       - name: Cross Build WebAssembly
         continue-on-error: true
-        run: cross build --release --target wasm32-unknown-emscripten --verbose ; ls -hl target/wasm32-unknown-emscripten/release/
+        run: for i in {1..5};do echo try build $i; cross build --release --target wasm32-unknown-emscripten --verbose && break;done;  ls -hl target/wasm32-unknown-emscripten/release/
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.wasm32-unknown-emscripten
@@ -190,7 +190,7 @@ jobs:
           git reset --hard ${{github.sha}}
 
       - name: Build Linux
-        run: cargo build --release --verbose
+        run: for i in {1..5};do echo try build $i; cargo build --release --verbose && break;done;
 
       - name: Run tests
         run: cargo test --release --verbose -- --nocapture
@@ -232,7 +232,7 @@ jobs:
         run: rustup target add x86_64-unknown-linux-musl
 
       - name: Build Linux (Musl)
-        run: cargo build --release --target x86_64-unknown-linux-musl --verbose
+        run: for i in {1..5};do echo try build $i; cargo build --release --target x86_64-unknown-linux-musl --verbose && break;done;
 
       - uses: actions/upload-artifact@v3
         with:
@@ -267,7 +267,7 @@ jobs:
         shell: bash
 
       - name: Build (windows)
-        run: cargo build --release --verbose
+        run: for i in {1..5};do echo try build $i; cargo build --release --verbose && break;done;
 
       - uses: actions/upload-artifact@v3
         with:
@@ -301,7 +301,7 @@ jobs:
           git reset --hard ${{github.sha}}
       
       - name: Build (mac)
-        run: cargo build --release --verbose
+        run: for i in {1..5};do echo try build $i; cargo build --release --verbose && break;done;
 
       - uses: actions/upload-artifact@v3
         with:
