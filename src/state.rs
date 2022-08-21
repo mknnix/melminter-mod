@@ -177,26 +177,27 @@ impl MintState {
                 }).take(threads).collect()
             };
 
-            // sweep all expired seeds (always bulk)
-            let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
-            for (exp_th, exp_vals) in &self.seed_expired {
-                break;
-                log::debug!("sweep all expired new-coin(s): tx-hash={:?}, values={:?}", exp_th, exp_vals);
-                assert!( exp_vals.len() > 0 );
-                let (_exp_id, exp_data) = exp_vals[0].clone();
+            let mut exp_add: usize = 0;
+            if self.seed_expired.len() > (threads*15) { // sweep all expired seeds (always bulk)
+                let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
+                for (exp_th, exp_vals) in &self.seed_expired {
+                    log::debug!("sweep all expired new-coin(s): tx-hash={:?}, values={:?}", exp_th, exp_vals);
+                    assert!( exp_vals.len() > 0 );
+                    let (_exp_id, exp_data) = exp_vals[0].clone();
 
-                let denom = exp_data.denom;
-                for it in exp_vals {
-                    assert!( it.1.denom == denom );
+                    let denom = exp_data.denom;
+                    for it in exp_vals {
+                        assert!( it.1.denom == denom );
+                    }
+
+                    outputs.push(CoinData {
+                        covhash: if (fastrand::u128(..) % 2) == 0 { exp_dst } else { "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()? },
+                        denom,
+                        value: CoinValue( exp_vals.len() as u128 ),
+                        additional_data: vec![],
+                    });
+                    exp_add += 1;
                 }
-
-                outputs.push(CoinData {
-                    covhash: exp_dst,
-                    //covhash: "t1m9v0fhkbr7q1sfg59prke1sbpt0gm2qgrb166mp8n8m59962gdm0".parse()?,
-                    denom,
-                    value: CoinValue( exp_vals.len() as u128 ),
-                    additional_data: vec![],
-                });
             }
 
             // prepare tx...
@@ -211,7 +212,10 @@ impl MintState {
 
             let fees = tx.fee;
             let sent_hash = self.wallet.send_tx(tx).await?;
-            //self.seed_expired.clear();
+
+            if exp_add > 0 {
+                self.seed_expired.clear();
+            }
 
             log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.fee_history.push(FeeRecord{
@@ -275,6 +279,7 @@ impl MintState {
         on_progress: impl Fn(usize, f64) + Sync + Send + 'static,
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
+        #[cfg(not(android))]
         use thread_priority::{ set_current_thread_priority, ThreadPriority };
 
         // we do not need to save the expired seeds, so just clone
@@ -297,13 +302,9 @@ impl MintState {
                 .hash();
             let chi = tmelcrypt::hash_keyed(&tip_header_hash, &seed.stdcode());
             let on_progress = on_progress.clone();
-            // let core_ids = core_affinity::get_core_ids().unwrap();
-            // let core_id = core_ids[idx % core_ids.len()];
-            /*
-            let proof_fut = std::thread::spawn(move || {
-                // core_affinity::set_for_current(core_id);
-                set_current_thread_priority(ThreadPriority::Min);
 
+            #[cfg(android)]
+            let proof_fut = std::thread::spawn(move || {
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
@@ -318,7 +319,8 @@ impl MintState {
                     ),
                 )
             });
-            */
+
+            #[cfg(not(android))]
             let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
                 .name( format!("Minting-{}", idx) )
                 .priority(ThreadPriority::Min)
