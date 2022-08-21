@@ -279,7 +279,7 @@ impl MintState {
         on_progress: impl Fn(usize, f64) + Sync + Send + 'static,
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
-        #[cfg(not(android))]
+        #[cfg(not(target_os="android"))]
         use thread_priority::{ set_current_thread_priority, ThreadPriority };
 
         // we do not need to save the expired seeds, so just clone
@@ -289,7 +289,7 @@ impl MintState {
         let mut proof_thrs = Vec::new();
         for (idx, seed) in seeds.iter().copied().take(threads).enumerate() {
             let tip_cdh = repeat_fallible(|| async { self.client.snapshot().await?.get_coin(seed).await })
-                            .await.context("transaction's input spent from behind our back")?;
+                .await.context("transaction's input spent from behind our back")?;
 
             log::debug!("tip_cdh = {:#?}", tip_cdh);
 
@@ -303,7 +303,7 @@ impl MintState {
             let chi = tmelcrypt::hash_keyed(&tip_header_hash, &seed.stdcode());
             let on_progress = on_progress.clone();
 
-            #[cfg(android)]
+            #[cfg(target_os="android")]
             let proof_fut = std::thread::spawn(move || {
                 (
                     tip_cdh,
@@ -320,7 +320,7 @@ impl MintState {
                 )
             });
 
-            #[cfg(not(android))]
+            #[cfg(not(target_os="android"))]
             let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
                 .name( format!("Minting-{}", idx) )
                 .priority(ThreadPriority::Min)

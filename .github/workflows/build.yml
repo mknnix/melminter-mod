@@ -30,7 +30,7 @@ jobs:
 
       - name: Cross Build aarch64 android
         continue-on-error: true
-        run: for i in {1..5};do echo try build $i; rm Cargo.lock; cross build --release --target aarch64-linux-android --verbose && break;done;
+        run: for i in {1..5};do echo try build $i; cross build --release --target aarch64-linux-android --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.aarch64-android
@@ -51,7 +51,7 @@ jobs:
 
       - name: Cross Build x86 android (64-bit)
         continue-on-error: true
-        run: for i in {1..5};do echo try build $i; rm Cargo.lock; cross build --release --target x86_64-linux-android --verbose && break;done;
+        run: for i in {1..5};do echo try build $i; cross build --release --target x86_64-linux-android --verbose && break;done;
       - uses: actions/upload-artifact@v3
         with:
           name: melminter-mod.amd64-android
