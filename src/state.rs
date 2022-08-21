@@ -180,6 +180,7 @@ impl MintState {
             // sweep all expired seeds (always bulk)
             let exp_dst = if let Some(d) = self.covnull { d } else { new_void_address() };
             for (exp_th, exp_vals) in &self.seed_expired {
+                break;
                 log::debug!("sweep all expired new-coin(s): tx-hash={:?}, values={:?}", exp_th, exp_vals);
                 assert!( exp_vals.len() > 0 );
                 let (_exp_id, exp_data) = exp_vals[0].clone();
@@ -210,7 +211,7 @@ impl MintState {
 
             let fees = tx.fee;
             let sent_hash = self.wallet.send_tx(tx).await?;
-            self.seed_expired.clear();
+            //self.seed_expired.clear();
 
             log::debug!("(fee-safe) sent newcoin tx with fee: {}", fees);
             self.fee_history.push(FeeRecord{
