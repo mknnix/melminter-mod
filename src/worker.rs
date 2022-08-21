@@ -2,10 +2,18 @@ use std::{
     collections::{HashMap, VecDeque},
     net::SocketAddr,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
-use crate::{repeat_fallible, state::MintState, CmdOpts, panic_exit};
+use crate::{
+    repeat_fallible,
+    state::MintState,
+    db::{TrySendProof, TrySendProofState},
+    CmdOpts,
+    panic_exit
+};
+use bincode;
+
 use dashmap::{mapref::multiple::RefMulti, DashMap};
 use melwallet_client::WalletClient;
 use prodash::{messages::MessageLevel, tree::Item, unit::display::Mode};
@@ -16,7 +24,11 @@ use smol::{
 use themelio_nodeprot::ValClient;
 use themelio_stf::Tip910MelPowHash;
 use themelio_structs::{
-    Address, CoinData, CoinDataHeight, CoinID, CoinValue, Denom, NetID, PoolKey, TxKind,
+    Address, CoinData,
+    CoinDataHeight, CoinID,
+    CoinValue, Denom,
+    NetID,
+    PoolKey, TxKind,
 };
 
 /// Worker configuration
@@ -77,7 +89,99 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let max_losts: CoinValue = cli_opts.balance_max_losts.parse().unwrap();
         let bulk_seeds = cli_opts.bulk_seeds;
 
+        // establish a connection to local disk storage for saves un-sent proofs.
+        let db = crate::db::db_open()?;
+        let dict_proofs = db.open_dict(crate::db::TABLE_PROOF_LIST)?;
+
+        // A queue for any proofs that waiting to submit (global store / also possible from disk...)
+        let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = VecDeque::new();
         loop {
+            let my_speed = compute_speed().await;
+            let my_difficulty = {
+                let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
+                match cli_opts.fixed_diff {
+                    None => { auto },
+                    Some(diff) => { diff }
+                }
+            };
+            let approx_iter = 2.0f64.powi(my_difficulty as _) / my_speed;
+
+            // Time to submit the proofs, first we store all proofs in disk. then for every proof in the batch, we attempt to submit it. If the submission fails, we move on, because there might be some weird race condition with melwalletd going on.
+            // We also attempt to submit transactions in parallel. This is done by retrying always (with max count 3).
+            let mut waits = vec![];
+            if submit_proofs.len() > 0 {
+                let txs = submit_proofs.len();
+
+                let mut sub = worker.lock().unwrap().add_child("submitting proof");
+                sub.init(Some(txs), None);
+
+                //let mut retry_lefts = txs * 10; // retry limit
+                let max_retry: u8 = 3;
+                while submit_proofs.len() > 0 {
+                    let (trys, mut tryst) = submit_proofs.pop_front().unwrap();
+                    let (coin, data, proof) = (trys.coin, &trys.data, &trys.proof);
+
+                    let snap = client.snapshot().await?;
+                    let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
+                    let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
+                    let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
+
+                    match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
+                        Err(err) => {
+                            /*
+                            if err.to_string().contains("preparation") || err.to_string().contains("timeout") {
+                                ; // make sure try again
+                                let mut sub = sub.add_child("waiting for available coins");
+                                sub.init(None, None);
+                                smol::Timer::after(Duration::from_secs(10)).await;
+                            }
+                            */
+
+                            tryst.fails += 1;
+                            tryst.errors.push( format!("{:?} | {:?}", SystemTime::now(), err) );
+                            log::warn!("FAILED a proof submission for some reason: {:?}", err);
+
+                            if tryst.fails <= max_retry {
+                                submit_proofs.push_back( ( trys.clone(), tryst.clone() ) );
+                            } else {
+                                log::error!("Dropping proof {:?} from submit queue, because reach max retry limit", (coin, data));
+                            }
+                        },
+                        Ok(res) => {
+                            tryst.sent = true;
+                            waits.push(res);
+
+                            sub.inc();
+                            sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
+                        }
+                    }
+
+                    {
+                        let trys_key = bincode::serialize(&trys)?;
+                        let trys_val = bincode::serialize(&tryst)?;
+                        dict_proofs.insert(trys_key, trys_val)?;
+                    }
+
+                    smol::Timer::after(Duration::from_secs(1)).await;
+                }
+
+                assert!(waits.len() <= txs);
+                if waits.len() != txs {
+                    log::error!("failed to submit {} proofs", txs - waits.len());
+                }
+            }
+            if waits.len() > 0 {
+                let mut sub = worker
+                    .lock()
+                    .unwrap()
+                    .add_child("waiting for confirmation of proof");
+                sub.init(Some(waits.len()), None);
+                for to_wait in waits {
+                    opts.wallet.wait_transaction(to_wait).await?;
+                    sub.inc();
+                }
+            }
+
             // check profit status, and/or quitting without incomes
             mint_state.fee_failsafe(max_losts, quit_without_profit);
 
@@ -140,16 +244,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     opts.wallet.wait_transaction(h).await?;
                 }
             }
-
-            let my_speed = compute_speed().await;
-            let my_difficulty = {
-                let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
-                match cli_opts.fixed_diff {
-                    None => { auto },
-                    Some(diff) => { diff }
-                }
-            };
-            let approx_iter = 2.0f64.powi(my_difficulty as _) / my_speed;
 
             worker.lock().unwrap().message(
                 MessageLevel::Info,
@@ -330,73 +424,24 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 format!("built batch of {} future proofs", batch.len()),
             );
 
-            // Time to submit the proofs. For every proof in the batch, we attempt to submit it. If the submission fails, we move on, because there might be some weird race condition with melwalletd going on.
-            // We also attempt to submit transactions in parallel. This is done by retrying always (with max count 10).
-            let mut waits = vec![];
-            {
-                // a retry queue for submit proofs
-                let mut submits = VecDeque::new();
-                for (coin, data, proof) in batch {
-                    submits.push_back((coin, data, proof));
+            for (coin, data, proof) in batch {
+                let trys = TrySendProof { coin, data, proof };
+                let tryst = TrySendProofState {
+                    fails: 0u8,
+                    created: SystemTime::now(),
+                    sent: false,
+                    failed: false,
+                    errors: vec![],
+                };
+
+                {
+                    let trys_key: Vec<u8> = bincode::serialize(&trys)?;
+                    let trys_val: Vec<u8> = bincode::serialize(&tryst)?;
+                    dict_proofs.insert(trys_key, trys_val)?;
                 }
-                let txs = submits.len();
-
-                let mut sub = worker.lock().unwrap().add_child("submitting proof");
-                sub.init(Some(txs), None);
-
-                let mut retry_lefts = txs * 10; // retry limit
-                while submits.len() > 0 {
-                    let (coin, data, proof) = submits.pop_front().unwrap();
-
-                    let snap = client.snapshot().await?;
-                    let reward_speed = 2u128.pow(my_difficulty as u32) / (snap.current_header().height.0 + 40 - data.height.0) as u128;
-                    let reward = themelio_stf::calculate_reward(reward_speed * 100, snap.current_header().dosc_speed, my_difficulty as u32, true);
-                    let reward_ergs = themelio_stf::dosc_to_erg(snap.current_header().height, reward);
-
-                    match mint_state.send_mint_transaction(coin, my_difficulty, proof.clone(), reward_ergs.into()).await {
-                        Err(err) => {
-                            log::error!("FAILED a proof submission for some reason: {:?}", err);
-
-                            if err.to_string().contains("preparation") || err.to_string().contains("timeout") {
-                                retry_lefts += 1; // make sure try again
-                                let mut sub = sub.add_child("waiting for available coins");
-                                sub.init(None, None);
-                                smol::Timer::after(Duration::from_secs(10)).await;
-                            }
-
-                            if retry_lefts > 0 {
-                                retry_lefts -= 1;
-                                submits.push_back((coin, data, proof));
-                            } else {
-                                log::warn!("dropping proof {:?} because reach max retry limit", (coin, data));
-                            }
-                        },
-                        Ok(res) => {
-                            waits.push(res);
-
-                            sub.inc();
-                            sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
-                        }
-                    }
-
-                    smol::Timer::after(Duration::from_secs(1)).await;
-                }
-
-                assert!(waits.len() <= txs);
-                if waits.len() != txs {
-                    log::error!("failed to submit {} proofs", txs - waits.len());
-                }
+                submit_proofs.push_back((trys, tryst));
             }
-
-            let mut sub = worker
-                .lock()
-                .unwrap()
-                .add_child("waiting for confirmation of proof");
-            sub.init(Some(waits.len()), None);
-            for to_wait in waits {
-                opts.wallet.wait_transaction(to_wait).await?;
-                sub.inc();
-            }
+            dict_proofs.flush()?;
         }
 
         return Ok::<_, surf::Error>(()); // this unreachable code used to infer generic types of function repeat_fallible

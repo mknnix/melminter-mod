@@ -40,4 +40,7 @@ melpow = "0.1.1"
 ctrlc = "3.2.2"
 
 thread-priority = "0.8.2"
+boringdb = "0.4.1"
+bincode = "1.3.3"
+dirs = "4.0.0"
 

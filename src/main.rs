@@ -15,6 +15,8 @@ use themelio_structs::{CoinValue, NetID};
 mod cmdopts;
 mod state;
 mod worker;
+mod db;
+
 // use smol::prelude::*;
 use crate::worker::{Worker, WorkerConfig};
 
@@ -219,10 +221,9 @@ fn nva_test() {
     }
 }
 
-//#[test]
+#[test]
 fn nnd_test() {
-    for i in 0..10 {
+    for i in 0..1 {
         println!("null[{}] {}", i+1, new_null_dst());
     }
 }
-
