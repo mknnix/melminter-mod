@@ -93,9 +93,36 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let db = crate::db::db_open()?;
         let dict_proofs = db.open_dict(crate::db::TABLE_PROOF_LIST)?;
 
+        let dict_proofs_key = b"\x7c\x9c\x69\x8b\x81\x00\x0f\x15..metadata/key_array".to_vec();
+        let mut dict_proofs_key_raw: Vec< Vec<u8> > = vec![];
+
+        if let Some(raw) = dict_proofs.get(&dict_proofs_key)? {
+            dict_proofs_key_raw = bincode::deserialize(&raw)?;
+            dict_proofs_key_raw.dedup();
+        } else {
+            let v = bincode::serialize(&dict_proofs_key_raw)?;
+            dict_proofs.insert(dict_proofs_key.clone(), v)?;
+        }
+
         // A queue for any proofs that waiting to submit (global store / also possible from disk...)
         let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = VecDeque::new();
+        for key in &dict_proofs_key_raw {
+            if let Some(val) = dict_proofs.get(&key)? {
+                let key = bincode::deserialize(&key)?;
+                let val = bincode::deserialize(&val)?;
+                submit_proofs.push_back( (key, val) );
+            } else {
+                log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value!", key);
+            }
+        }
+
         loop {
+            for (k, _) in &submit_proofs {
+                dict_proofs_key_raw.push( bincode::serialize(&k)? );
+            }
+            dict_proofs_key_raw.dedup();
+            dict_proofs.insert( dict_proofs_key.clone(), bincode::serialize(&dict_proofs_key_raw)? )?;
+
             let my_speed = compute_speed().await;
             let my_difficulty = {
                 let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
