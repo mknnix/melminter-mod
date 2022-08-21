@@ -2,7 +2,7 @@ fn git_commit_hash() -> String {
     #[allow(unused_variables)]
 
     let static_git_sha = "[[Replaceit]]";
-let static_git_sha = "git.dc2baa379cee3ae84a51cbb95e9ae6f8b43e8c9e"; //CODEADD// by gitsha in code
+let static_git_sha = "git.c05755e7220827bb68b2625e28567d5f74d18ff1"; //CODEADD// by gitsha in code
 
     if static_git_sha.contains("[[Replaceit]]") {
         return _dyna_git_commit_hash();
