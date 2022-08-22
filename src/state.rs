@@ -311,6 +311,7 @@ impl MintState {
 
             #[cfg(target_os="android")]
             let proof_fut = std::thread::spawn(move || {
+                log::info!("for android the auto lower nice is disabled due to un-resolved issue, you need to manual set it (uses 'nice' command)");
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(

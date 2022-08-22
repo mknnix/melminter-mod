@@ -221,15 +221,10 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 .await?
                 .expect("must have erg-mel pool");
 
+            let summary = opts.wallet.summary().await?;
+
             // If we have any erg, convert it all to mel.
-            let our_ergs = opts
-                .wallet
-                .summary()
-                .await?
-                .detailed_balance
-                .get("64")
-                .copied()
-                .unwrap_or_default();
+            let our_ergs = summary.detailed_balance.get("64").copied().unwrap_or_default();
             if our_ergs > CoinValue(0) {
                 worker
                     .lock()
@@ -238,17 +233,12 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 mint_state.convert_doscs(our_ergs).await?;
             }
 
-            // skipping transfer profits if no provide payout address.
+            // skipping transfer profits if without payout address.
             if let Some(payout) = opts.payout {
+                //let our_mels = summary.detailed_balance.get("6d").copied().unwrap_or_default();
+                let our_mels: CoinValue = summary.total_micromel;
+
                 // If we have more than 1 MEL, transfer [half balance] to the backup wallet.
-                let our_mels = opts
-                    .wallet
-                    .summary()
-                    .await?
-                    .detailed_balance
-                    .get("6d")
-                    .copied()
-                    .unwrap_or_default();
                 if our_mels > CoinValue::from_millions(1u8) {
                     let to_transfer = our_mels / 2;
                     worker.lock().unwrap().info(format!("balance of working-wallet: {} | profits have more than 1.0 MEL, transferring half to payout address...", our_mels));
@@ -280,7 +270,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 format!(
                     "Selected difficulty {}: {} (approx. {:.3}s / tx)",
 
-                    if let Some(_) = cli_opts.fixed_diff { "[fixed]" } else { "[auto]" },
+                    if cli_opts.fixed_diff.is_none() { "[auto]" } else { "[fixed]" },
                     my_difficulty,
                     approx_iter,
                 ),
@@ -292,6 +282,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
             let seed_ttl = mint_state.set_seed_expire(Duration::from_secs_f64(approx_iter*2.0));
             worker.lock().unwrap().info(format!("Seed TTL: {} blocks ({}s)", seed_ttl, seed_ttl*30));
+            worker.lock().unwrap().info(format!("Minter Address: {}", summary.address));
 
             // if requested, stopping before generate seed
             if recv_stop.try_recv().is_ok() {

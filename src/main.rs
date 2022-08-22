@@ -15,6 +15,8 @@ use themelio_structs::{CoinValue, NetID};
 mod cmdopts;
 mod state;
 mod worker;
+
+#[allow(unused)]
 mod db;
 
 // use smol::prelude::*;
@@ -214,4 +216,6 @@ pub fn new_null_dst() -> themelio_structs::Address {
     }
 }
 
+#[cfg(test)]
 mod test;
+
