@@ -85,9 +85,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let client = get_valclient(netid, opts.connect).await?;
 
         let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
-        let quit_without_profit = ! cli_opts.disable_profit_failsafe;
-        let max_losts: CoinValue = cli_opts.balance_max_losts.parse().unwrap();
-        let bulk_seeds = cli_opts.bulk_seeds;
+        let quit_without_profit = if is_testnet { false } else { ! cli_opts.disable_profit_failsafe };
+        let max_losts: CoinValue = if is_testnet { CoinValue(2000000) } else { cli_opts.balance_max_losts.parse().unwrap() };
+        let bulk_seeds = if is_testnet { true } else { cli_opts.bulk_seeds };
 
         // establish a connection to local disk storage for saves un-sent proofs.
         let db = crate::db::db_open()?;
@@ -116,12 +116,15 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
         }
 
+        dict_proofs.flush()?;
+
         loop {
             for (k, _) in &submit_proofs {
                 dict_proofs_key_raw.push( bincode::serialize(&k)? );
             }
             dict_proofs_key_raw.dedup();
             dict_proofs.insert( dict_proofs_key.clone(), bincode::serialize(&dict_proofs_key_raw)? )?;
+            dict_proofs.flush()?;
 
             let my_speed = compute_speed().await;
             let my_difficulty = {

@@ -214,16 +214,4 @@ pub fn new_null_dst() -> themelio_structs::Address {
     }
 }
 
-#[test]
-fn nva_test() {
-    for i in 0..100000 {
-    println!("VA-{}: {}", i+1, new_void_address());
-    }
-}
-
-#[test]
-fn nnd_test() {
-    for i in 0..1 {
-        println!("null[{}] {}", i+1, new_null_dst());
-    }
-}
+mod test;

@@ -8,7 +8,13 @@ use serde::{Deserialize, Serialize};
 use stdcode::StdcodeSerializeExt;
 use themelio_nodeprot::ValClient;
 use themelio_stf::Tip910MelPowHash;
-use themelio_structs::{CoinData, CoinDataHeight, CoinID, CoinValue, Denom, PoolKey, TxHash, TxKind, Address};
+use themelio_structs::{
+    CoinData, CoinDataHeight, CoinID,
+    CoinValue, Denom,
+    NetID,
+    PoolKey, TxHash, TxKind,
+    Address,
+};
 
 use crate::{repeat_fallible, panic_exit, new_void_address, new_null_dst};
 
@@ -364,7 +370,9 @@ impl MintState {
     ) -> surf::Result<TxHash> {
         self.unlock().await?;
 
-        let own_cov = self.wallet.summary().await?.address;
+        let summary = self.wallet.summary().await?;
+        let own_cov = summary.address;
+        let is_testnet = summary.network != NetID::Mainnet;
         let tx = self
             .wallet
             .prepare_transaction(
@@ -386,7 +394,7 @@ impl MintState {
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
             log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to approx-income({} MEL) amount!! you should check your difficulty or a network issue.", fees, mels);
-            if fees > mels {
+            if fees > mels && (!is_testnet) {
                 return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
             }
         }
@@ -426,7 +434,10 @@ impl MintState {
     pub async fn convert_doscs(&mut self, doscs: CoinValue) -> surf::Result<()> {
         self.unlock().await?;
 
-        let my_address = self.wallet.summary().await?.address;
+        let summary = self.wallet.summary().await?;
+        let my_address = summary.address;
+        let is_testnet = summary.network != NetID::Mainnet;
+
         let tx = self
             .wallet
             .prepare_transaction(
@@ -448,7 +459,7 @@ impl MintState {
         let mels = self.erg_to_mel(doscs).await?;
         if fees >= mels {
             log::warn!("WARNING: This ERG-to-MEL swap fee({} MEL) great-than-or-equal to income({} MEL) amount! you should check your difficulty or a network issue.", fees, mels);
-            if fees > mels {
+            if fees > mels && (!is_testnet) {
                 return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
             }
         }
