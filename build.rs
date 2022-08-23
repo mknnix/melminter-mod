@@ -4,6 +4,9 @@ fn git_commit_hash() -> String {
     let static_git_sha = "[[Replaceit]]";
 let static_git_sha = "git.9cf7de615e3ff7ad04e304d1859f2aaf462b086c"; //CODEADD// by gitsha in code
 
+    if env!("CARGO_PKG_VERSION").to_ascii_lowercase().contains("alpha") == false {
+        return "release".to_string();
+    }
     if static_git_sha.contains("[[Replaceit]]") {
         return _dyna_git_commit_hash();
     }

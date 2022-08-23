@@ -285,7 +285,7 @@ impl MintState {
         on_progress: impl Fn(usize, f64) + Sync + Send + 'static,
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
-        #[cfg(not(target_os="android"))]
+        //#[cfg(not(target_os="android"))]
         use thread_priority::{ set_current_thread_priority, ThreadPriority };
 
         // we do not need to save the expired seeds, so just clone
@@ -309,7 +309,7 @@ impl MintState {
             let chi = tmelcrypt::hash_keyed(&tip_header_hash, &seed.stdcode());
             let on_progress = on_progress.clone();
 
-            #[cfg(target_os="android")]
+            /*#[cfg(target_os="android")]
             let proof_fut = std::thread::spawn(move || {
                 log::info!("for android the auto lower nice is disabled due to un-resolved issue, you need to manual set it (uses 'nice' command)");
                 (
@@ -325,9 +325,9 @@ impl MintState {
                         Tip910MelPowHash,
                     ),
                 )
-            });
+            });*/
 
-            #[cfg(not(target_os="android"))]
+            //#[cfg(not(target_os="android"))]
             let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
                 .name( format!("Minting-{}", idx) )
                 .priority(ThreadPriority::Min)

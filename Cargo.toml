@@ -1,6 +1,6 @@
 [package]
 name = "melminter-mod"
-version = "0.8.7-alpha2"
+version = "0.8.9-alpha0"
 authors = ["nullchinchilla <nullchinchilla@pm.me>", "mkn <email@please.see.git.commit>"]
 edition = "2021"
 
@@ -43,6 +43,6 @@ boringdb = "0.4.1"
 bincode = "1.3.3"
 dirs = "4.0.0"
 
-[target.'cfg(not(target_os="android"))'.dependencies]
-thread-priority = "0.8.2"
+#[target.'cfg(not(target_os="android"))'.dependencies]
+thread-priority = "0.9.1"
 
