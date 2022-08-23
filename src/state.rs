@@ -20,49 +20,28 @@ use crate::{repeat_fallible, panic_exit, new_void_address, new_null_dst};
 
 #[derive(Clone)]
 pub struct MintState {
-    wallet: WalletClient,
-    client: ValClient,
-
-    // expire time of each seeds, all expired coins will be ignored.
-    seed_ttl: Option<u64>,
-    // here store all expired seeds
-    seed_expired: HashMap<TxHash, Vec<(CoinID, CoinData)>>,
-    // what address to receive expired seeds
-    covnull: Option<Address>,
-
-    // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
-    fee_history: Vec<FeeRecord>,
+    wallet: WalletState, // wrapped wallet add more function (dual-unlock, mel-only-or-0, )
+    client: ValClient, // connect for a blockchain node
+    testnet: bool, // Whether use testnet rules
+    fee_handler: FeeSchedule,
+    seed_handler: SeedSchedule,
 }
 
-#[derive(Copy, Clone, Debug)]
-struct FeeRecord {
-    kind: TxKind, // TxKind::Normal for newcoin; TxKind::DoscMint for doscMint; TxKind::Swap for swap.
-    time: SystemTime,
-    balance: CoinValue,
-    fee: CoinValue,
-    income: CoinValue, // ERG(should be convert and store MEL) for doscMint, or MEL for swap. any newcoin tx should be always 0.
+#[derive(Clone, Debug)]
+pub struct SeedSchedule {
+    /// expire blocks of each seeds, all expired coins will be ignored
+    pub ttl: Option<u64>,
+    /// here store all expired seeds
+    pub expired: HashMap<TxHash, Vec<(CoinID, CoinData)>>,
+    /// what address to receive expired seeds
+    pub covnull: Option<Address>,
+    /// wallet for seeds only
+    pub wallet: WalletState,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PrepareReq {
-    signing_key: String,
-    outputs: Vec<CoinData>,
-}
-
-impl MintState {
-    pub fn new(wallet: WalletClient, client: ValClient) -> Self {
-        Self {
-            wallet,
-            client,
-            seed_ttl: None, seed_expired: HashMap::new(),
-            covnull: Some( new_null_dst() ),
-            fee_history: vec![],
-        }
-    }
-
-    // caller provides Duration; method returns current TTL value.
+impl SeedSchedule {
+    /// caller provides Duration; method returns **current** TTL value.
     pub fn set_seed_expire(&mut self, lifetime: Duration) -> u64 {
-        if let Some(blocks) = self.seed_ttl {
+        if let Some(blocks) = self.ttl {
             return blocks;
         }
 
@@ -73,91 +52,18 @@ impl MintState {
         if secs < min { secs = min; }
         if secs > max { secs = max; }
 
-        // ttl-blocks = expire-time / block-interval (all time units seconds)
+        /// ttl-blocks = expire-time / block-interval (all time units seconds)
         let blocks = secs / 30;
 
-        self.seed_ttl = Some(blocks);
+        self.ttl = Some(blocks);
         return blocks;
-    }
-
-    pub async fn get_balance(&self) -> surf::Result<CoinValue> {
-        Ok( self.wallet.summary().await?.detailed_balance.get("6d").copied().unwrap_or(CoinValue(0)) )
-    }
-
-    pub fn fee_failsafe(&self, max_lost: CoinValue, quit: bool) {
-        let fh = self.fee_history.clone();
-        log::debug!("(fee-safe) our balance history: {:?}", fh);
-
-        let fh_len = fh.len();
-        if fh_len < 2 {
-            return;
-        }
-
-        let mut lost_coins = CoinValue(0);
-        for i in 0 .. fh_len {
-            let it = fh[i];
-            assert!( it.time < SystemTime::now() );
-            assert!( it.kind == TxKind::Normal || it.kind == TxKind::DoscMint || it.kind == TxKind::Swap );
-
-            if i > 0 {
-                let prev = fh[i-1];
-                assert!( prev.time < it.time );
-            }
-
-            // skip any newcoin tx(s)
-            if it.kind == TxKind::Normal { continue; }
-
-            // calculate the profits
-            let profits: i128 = (it.income.0 as i128) - (it.fee.0 as i128);
-            // ignore this scenario of no-profit and no-lost
-            if profits == 0 { continue; }
-
-            // negative-profits!!
-            if profits < 0 {
-                lost_coins += CoinValue((-profits) as u128);
-
-            // good, we have a positive profit margin.
-            } else if lost_coins > CoinValue(0) {
-                let p = CoinValue(profits as u128);
-                if lost_coins <= p {
-                    lost_coins = CoinValue(0);
-                } else {
-                    lost_coins -= p;
-                }
-            }
-        }
-
-        // if there is any balance lost, then warnings will be given in any case.
-        if lost_coins > CoinValue(0) {
-            let first = fh[0];
-            let last = fh[fh_len - 1];
-            log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time), first.balance, last.balance, first.balance - last.balance);
-        }
-
-        // if the loss exceeds the tolerable limit:
-        if lost_coins >= max_lost {
-            // then, terminate this process if allowed to stop minting.
-            if quit {
-                panic_exit!(91, "melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your coins!", lost_coins, max_lost);
-            }
-        }
-    }
-
-    /// unlock mint-wallet, first try plaintext, second try empty password if fails, final return error if still failed.
-    pub async fn unlock(&self) -> surf::Result<()> {
-        if self.wallet.summary().await?.locked {
-            if let Err(_) = self.wallet.unlock(None).await {
-                self.wallet.unlock(Some("".to_string())).await?;
-            }
-        }
-        Ok(())
     }
 
     /// Generates a list of "seed" coins.
     pub async fn generate_seeds(&mut self, threads: usize, seed_bulk: bool) -> surf::Result<()> {
         self.unlock().await?;
 
-        let my_address = self.wallet.summary().await?.address;
+        let my_address = self.wallet.0.summary().await?.address;
         loop {
             let toret = self.get_seeds_raw().await?;
             if toret.len() >= threads {
@@ -207,7 +113,7 @@ impl MintState {
             }
 
             // prepare tx...
-            let tx = self.wallet.prepare_transaction(
+            let tx = self.wallet.0.prepare_transaction(
                 TxKind::Normal,
                 vec![],
                 outputs,
@@ -217,7 +123,7 @@ impl MintState {
             ).await?;
 
             let fees = tx.fee;
-            let sent_hash = self.wallet.send_tx(tx).await?;
+            let sent_hash = self.wallet.0.send_tx(tx).await?;
 
             if exp_add > 0 {
                 self.seed_expired.clear();
@@ -232,20 +138,21 @@ impl MintState {
                 income: CoinValue(0),
             });
 
-            self.wallet.wait_transaction(sent_hash).await?;
+            self.wallet.0.wait_transaction(sent_hash).await?;
         }
     }
 
-    async fn get_seeds_raw(&mut self) -> surf::Result<Vec<CoinID>> {
-        let unspent_coins = self.wallet.get_coins().await?;
-        let current_height = self.client.snapshot().await?.current_header().height.0;
+    // caller needs provide current block number
+    async fn get_seeds_raw(&mut self, height: u64) -> surf::Result<Vec<CoinID>> {
+        let unspent_coins = self.wallet.0.get_coins().await?;
+        let current_height = height;//self.client.snapshot().await?.current_header().height.0;
 
         let mut seeds = vec![];
         for (id, data) in unspent_coins {
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
                 if let Some(ttl) = self.seed_ttl {
-                    let coin_height = match self.wallet.wait_transaction(id.txhash).await {
+                    let coin_height = match self.wallet.0.wait_transaction(id.txhash).await {
                         Ok(v) => v,
                         Err(e) => {
                             log::info!("cannot get seed height: {:?}", e);
@@ -278,6 +185,136 @@ impl MintState {
         Ok(seeds)
     }
 
+
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FeeRecord {
+    kind: TxKind, // TxKind::Normal for newcoin; TxKind::DoscMint for doscMint; TxKind::Swap for swap.
+    time: SystemTime,
+    balance: CoinValue,
+    fee: CoinValue,
+    income: CoinValue, // ERG(should be convert and store MEL) for doscMint, or MEL for swap. any newcoin tx should be always 0.
+}
+#[derive(Clone, Debug)]
+pub struct FeeSchedule {
+    // store the fee paid history of MEL balance, for fail-safe (for example automatic exit if mint no profit)
+    pub history: Vec<FeeRecord>,
+    // Is should be all fee level tx allowed anyway?
+    pub allow_any_tx: bool,
+    // Disabled any fee-safe?
+    pub no_failsafe: bool,
+
+    pub max_lost: CoinValue,
+    pub quit: bool,
+}
+impl FeeSchedule {
+    pub fn fee_failsafe(&self) {
+        let fh = self.history.clone();
+        log::debug!("(fee-safe) our balance history: {:?}", fh);
+
+        let fh_len = fh.len();
+        if fh_len < 2 {
+            return;
+        }
+
+        let mut lost_coins = CoinValue(0);
+        for i in 0 .. fh_len {
+            let it = fh[i];
+            assert!( it.time < SystemTime::now() );
+            assert!( it.kind == TxKind::Normal || it.kind == TxKind::DoscMint || it.kind == TxKind::Swap );
+
+            if i > 0 {
+                let prev = fh[i-1];
+                assert!( prev.time < it.time );
+            }
+
+            // skip any newcoin tx(s)
+            if it.kind == TxKind::Normal { continue; }
+
+            // calculate the profits
+            let profits: i128 = (it.income.0 as i128) - (it.fee.0 as i128);
+            // ignore this scenario of no-profit and no-lost
+            if profits == 0 { continue; }
+
+            // negative-profits!!
+            if profits < 0 {
+                lost_coins += CoinValue((-profits) as u128);
+
+            // good, we have a positive profit margin.
+            } else if lost_coins > CoinValue(0) {
+                let p = CoinValue(profits as u128);
+                if lost_coins <= p {
+                    lost_coins = CoinValue(0);
+                } else {
+                    lost_coins -= p;
+                }
+            }
+        }
+
+        // if there is any balance lost, then warnings will be display anyway.
+        if lost_coins > CoinValue(0) {
+            let first = fh[0];
+            let last = fh[fh_len - 1];
+            log::warn!("WARNING: our MEL coins losts in {:?}! the mint profit might be a negative! first coins: {} -> last coins: {} (lost coins: - {})", last.time.duration_since(first.time), first.balance, last.balance, first.balance - last.balance);
+        }
+
+        // if the loss exceeds the tolerable limit:
+        if lost_coins >= self.max_lost {
+            // then, terminate this process if allowed to stop minting.
+            if self.quit {
+                panic_exit!(91, "melminter balance fail-safe started! total-lost-coins {} >= {}(max) ! quit minting to keep your coins!", lost_coins, max_lost);
+            }
+        }
+    }
+
+
+}
+
+#[derive(Clone, Debug)]
+pub struct WalletState(WalletClient);
+
+impl WalletState {
+    /// simple/fast get mel balance only
+    pub async fn get_balance(&self) -> surf::Result<CoinValue> {
+        Ok( self.0.summary().await?.detailed_balance.get("6d").copied().unwrap_or(CoinValue(0)) )
+    }
+
+    /// unlock mint-wallet, first try plaintext, second try empty password if fails, final return error if still failed.
+    pub async fn unlock(&self) -> surf::Result<()> {
+        if self.0.summary().await?.locked {
+            if let Err(_) = self.0.unlock(None).await {
+                self.0.unlock(Some("".to_string())).await?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PrepareReq {
+    signing_key: String,
+    outputs: Vec<CoinData>,
+}
+
+impl MintState {
+    pub fn new(wallet: WalletClient, client: ValClient) -> Self {
+        Self {
+            wallet: WalletState (wallet),
+            client,
+            fee_handler: FeeSchedule {
+                history: vec![],
+                no_failsafe: false,
+                allow_any_tx: false,
+            },
+            seed_handler: SeedSchedule {
+                ttl: None,
+                expired: HashMap::new(),
+                covnull: Some(new_null_dst()),
+            }
+        }
+    }
+
     /// Creates a partially-filled-in transaction, with the given difficulty, that's neither signed nor feed. The caller should fill in the DOSC output.
     pub async fn mint_batch(
         &self,
@@ -286,10 +323,12 @@ impl MintState {
         threads: usize,
     ) -> surf::Result<Vec<(CoinID, CoinDataHeight, Vec<u8>)>> {
         //#[cfg(not(target_os="android"))]
-        use thread_priority::{ set_current_thread_priority, ThreadPriority };
+        //use thread_priority::{ set_current_thread_priority, ThreadPriority };
+        use thread_priority::*;
 
         // we do not need to save the expired seeds, so just clone
-        let seeds = self.clone().get_seeds_raw().await?;
+        let height = self.client.snapshot().await?.current_header().height.0;
+        let seeds = self.seed_handler.clone().get_seeds_raw(height).await?;
 
         let on_progress = Arc::new(on_progress);
         let mut proof_thrs = Vec::new();
@@ -309,9 +348,20 @@ impl MintState {
             let chi = tmelcrypt::hash_keyed(&tip_header_hash, &seed.stdcode());
             let on_progress = on_progress.clone();
 
-            /*#[cfg(target_os="android")]
+            //#[cfg(target_os="android")]
             let proof_fut = std::thread::spawn(move || {
-                log::info!("for android the auto lower nice is disabled due to un-resolved issue, you need to manual set it (uses 'nice' command)");
+                if ThreadPriority::Min.set_for_current().is_err() {
+                    if let Ok(n) = ThreadPriority::Min.min_value_for_policy(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch)) {
+                        let sets = ThreadPriority::from_posix(ScheduleParams { sched_priority: n }).set_for_current();
+                        log::info!("thread n set nice result {:?}", sets);
+                    } else {
+                        log::info!("cannot get min nice for current system");
+                    }
+                } else {
+                    log::info!("ok change priority to low for mint");
+                }
+
+                //log::info!("for android the auto lower nice is disabled due to un-resolved issue, you need to manual set it (uses 'nice' command)");
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
@@ -325,8 +375,9 @@ impl MintState {
                         Tip910MelPowHash,
                     ),
                 )
-            });*/
+            });
 
+            /*
             //#[cfg(not(target_os="android"))]
             let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
                 .name( format!("Minting-{}", idx) )
@@ -349,6 +400,7 @@ impl MintState {
                         ),
                     )
                 })?;
+                */
 
             proof_thrs.push(proof_fut);
         }
@@ -371,7 +423,7 @@ impl MintState {
     ) -> surf::Result<TxHash> {
         self.unlock().await?;
 
-        let summary = self.wallet.summary().await?;
+        let summary = self.wallet.0.summary().await?;
         let own_cov = summary.address;
         let is_testnet = summary.network != NetID::Mainnet;
         let tx = self
@@ -395,12 +447,12 @@ impl MintState {
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
             log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to approx-income({} MEL) amount!! you should check your difficulty or a network issue.", fees, mels);
-            if fees > mels && (!is_testnet) {
+            if fees > mels && (!is_testnet) && self.allow_any_fee {
                 return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
             }
         }
 
-        let txhash = self.wallet.send_tx(tx).await?;
+        let txhash = self.wallet.0.send_tx(tx).await?;
         log::debug!("(fee-safe) sent DoscMint tx with fee: {}", fees);
 
         self.fee_history.push(FeeRecord{
@@ -435,7 +487,7 @@ impl MintState {
     pub async fn convert_doscs(&mut self, doscs: CoinValue) -> surf::Result<()> {
         self.unlock().await?;
 
-        let summary = self.wallet.summary().await?;
+        let summary = self.wallet.0.summary().await?;
         let my_address = summary.address;
         let is_testnet = summary.network != NetID::Mainnet;
 
@@ -465,7 +517,7 @@ impl MintState {
             }
         }
 
-        let txhash = self.wallet.send_tx(tx).await?;
+        let txhash = self.wallet.0.send_tx(tx).await?;
 
         log::debug!("(fee-safe) sent ERG-to-MEL swap tx with fee: {}", fees);
         self.fee_history.push(FeeRecord{
@@ -476,7 +528,7 @@ impl MintState {
             income: mels,
         });
 
-        self.wallet.wait_transaction(txhash).await?;
+        self.wallet.0.wait_transaction(txhash).await?;
         Ok(())
     }
 
