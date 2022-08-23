@@ -1,6 +1,6 @@
 import os
 
-gitsha = os.popen('git rev-parse origin/master').read().strip()
+gitsha = os.popen('git rev-parse HEAD').read().strip()
 print('GIT CURRENT SHA', repr(gitsha))
 
 assert len( bytes.fromhex(gitsha) ) == 20
