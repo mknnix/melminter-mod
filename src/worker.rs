@@ -381,9 +381,12 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             };
                             let mel_balance = summary.detailed_balance.get("6d").unwrap();
 
-                            let mut new = worker.lock().unwrap()
-                                .add_child(format!( "current progress: {:.2} % | fee reserve: {} MEL", (curr_sum/total_sum) * 100.0, mel_balance ))
-                                .add_child(format!( "expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL", dosc_per_day, erg_per_day, mel_per_day ));
+                            let mut new = worker.lock().unwrap().add_child(
+                                format!( "current progress: {:.2} % | fee reserve: {} MEL\nexpected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
+                                         (curr_sum/total_sum) * 100.0, mel_balance,
+                                         dosc_per_day, erg_per_day, mel_per_day
+                                )
+                            );
                             new.init(None, None);
                             _space = Some(new);
                         }
