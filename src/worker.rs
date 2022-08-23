@@ -182,7 +182,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             waits.push(res);
 
                             sub.inc();
-                            sub.info(format!("(proof submit successfully) minted {} ERG", CoinValue(reward_ergs)));
+                            sub.info(format!("(proof sent) minted {} ERG", CoinValue(reward_ergs)));
                         }
                     }
 
@@ -212,9 +212,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 }
             }
 
-            // check profit status, and/or quitting without incomes
-            mint_state.fee_failsafe(max_losts, quit_without_profit);
-
             let snapshot = client.snapshot().await?;
             let erg_to_mel = snapshot
                 .get_pool(PoolKey::mel_and(Denom::Erg))
@@ -232,6 +229,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .message(MessageLevel::Info, format!("CONVERTING {} ERG!", our_ergs));
                 mint_state.convert_doscs(our_ergs).await?;
             }
+
+            // check profit status, and/or quitting without incomes
+            mint_state.fee_failsafe(max_losts, quit_without_profit);
 
             // skipping transfer profits if without payout address.
             if let Some(payout) = opts.payout {
@@ -339,17 +339,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                             let speed = (delta_sum * 1024) as f64 / start.elapsed().as_secs_f64();
                             let per_core_speed = speed / (threads as f64);
-                            let dosc_per_day =
-                                (per_core_speed / fastest_speed).powi(2) * (threads as f64);
-                            let erg_per_day = dosc_per_day
-                                * (themelio_stf::dosc_to_erg(
-                                    snapshot.current_header().height,
-                                    10000,
-                                ) as f64)
-                                / 10000.0;
-                            let (_, mel_per_day) = erg_to_mel
-                                .clone()
-                                .swap_many((erg_per_day * 10000.0) as u128, 0);
+                            let dosc_per_day = (per_core_speed / fastest_speed).powi(2) * (threads as f64);
+                            let erg_per_day = dosc_per_day * (themelio_stf::dosc_to_erg(snapshot.current_header().height, 10000) as f64) / 10000.0;
+                            let (_, mel_per_day) = erg_to_mel.clone().swap_many((erg_per_day * 10000.0) as u128, 0);
                             let mel_per_day = mel_per_day as f64 / 10000.0;
 
                             let summary = match wallet.summary().await {
@@ -363,13 +355,15 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                 Err(e) => {
                                     if let None = disconnect_started {
                                         log::error!("Failed to get wallet summary: {:?}", e);
-                                        log::warn!("Cannot connect to the melwalletd daemon! Melminter will try again until connected... and the mint progress still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered. For save your CPU computing resources, the program will exit if disconnected a long time (timeout is {:?})", disconnect_timeout);
+                                        log::warn!("Cannot connect to the melwalletd daemon! Melminter will try again until connected...");
+                                        log::info!("the mint progress will still continue, BUT PLEASE NOTE: your mint incomes will be ZERO if the daemon connection cannot recovered.");
+                                        log::info!("For save your CPU computing resources, the program will exit if disconnected a long time (timeout is {:?})", disconnect_timeout);
                                         disconnect_started = Some(Instant::now());
                                     }
 
                                     {
                                         // display error info.
-                                        let mut new = worker.lock().unwrap().add_child(format!("Failed to connect daemon: {:?}", e));
+                                        let mut new = worker.lock().unwrap().add_child(format!("(Failed to connect daemon: {:?})", e));
                                         new.init(None, None);
                                         _space = Some(new);
                                     }
@@ -387,11 +381,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             };
                             let mel_balance = summary.detailed_balance.get("6d").unwrap();
 
-                            let mut new = worker.lock().unwrap().add_child(format!(
-                                "current progress: {} | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL | fee reserve: {} MEL",
-                                if curr_sum <= 0.0 { "N/A".to_string() } else { format!("{:.2} %", 100.0/(total_sum/curr_sum)) },
-                                dosc_per_day, erg_per_day, mel_per_day, mel_balance
-                            ));
+                            let mut new = worker.lock().unwrap()
+                                .add_child(format!( "current progress: {:.2} % | fee reserve: {} MEL", (curr_sum/total_sum) * 100.0, mel_balance ))
+                                .add_child(format!( "expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL", dosc_per_day, erg_per_day, mel_per_day ));
                             new.init(None, None);
                             _space = Some(new);
                         }
