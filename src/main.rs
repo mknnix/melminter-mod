@@ -180,7 +180,9 @@ macro_rules! panic_exit {
             orig_hook(panic_info);
             std::process::exit($status);
         }));
-        panic!($($arg)*)
+
+        log::error!($($arg)*);
+        panic!("panic_exit! macro used")
     };
 }
 
