@@ -467,8 +467,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                                 format!( "current progress: {:.2} % (lefts? {:.1}s) | fee reserve: {} MEL | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
                                          (curr_sum/total_sum) * 100.0,
                                          {
-                                             let used = (curr_sum/total_sum) * approx_iter;
-                                             let left = approx_iter - used;
+                                             let used = (curr_sum/total_sum) * approx_round;
+                                             let left = approx_round - used;
                                              left
                                          },
                                          mel_balance,
