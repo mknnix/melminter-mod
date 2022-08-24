@@ -21,7 +21,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
 
@@ -235,7 +235,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
 
@@ -276,7 +276,7 @@ jobs:
           git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
         shell: bash
@@ -313,7 +313,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
       
