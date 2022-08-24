@@ -7,8 +7,8 @@ use std::{
 
 use crate::{
     repeat_fallible,
-    state::MintState,
-    db::{TrySendProof, TrySendProofState},
+    state::{MintState, FeeSchedule},
+    db::{TrySendProof, TrySendProofState, db_open, TABLE_PROOF_LIST},
     CmdOpts,
     panic_exit
 };
@@ -78,20 +78,37 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
     #[allow(unreachable_code)]
     repeat_fallible(|| async {
         let cli_opts = opts.cli_opts.clone();
+
         let worker = tree.add_child("worker");
         let worker = Arc::new(Mutex::new(worker));
+
         let netid = opts.netid;
         let is_testnet = netid != NetID::Mainnet;
+
         let client = get_valclient(netid, opts.connect).await?;
 
-        let mut mint_state = MintState::new(opts.wallet.clone(), client.clone());
-        let quit_without_profit = if is_testnet { false } else { ! cli_opts.disable_profit_failsafe };
-        let max_losts: CoinValue = if is_testnet { CoinValue(2000000) } else { cli_opts.balance_max_losts.parse().unwrap() };
-        let bulk_seeds = if is_testnet { true } else { cli_opts.bulk_seeds };
+        let no_failsafe =          if is_testnet { true } else { cli_opts.no_failsafe };
+        let quit_without_profit =  if is_testnet { false } else { ! cli_opts.disable_profit_failsafe };
+        let max_losts: CoinValue = if is_testnet { CoinValue(5_000000) } else { cli_opts.balance_max_losts.parse().unwrap() };
+        let bulk_seeds =           if is_testnet { true } else { cli_opts.bulk_seeds };
+        let allow_any_tx =         if is_testnet { true } else { cli_opts.allow_any_tx };
+
+        // initial mint state with fee policy
+        let mut mint_state = MintState::new(opts.wallet.clone(), client.clone(),
+            FeeSchedule {
+                allow_any_tx,
+                history: vec![],
+                max_lost: max_losts,
+                quit: quit_without_profit,
+                no_failsafe,
+            });
+        if bulk_seeds {
+            mint_state.seed_handler.bulk();
+        }
 
         // establish a connection to local disk storage for saves un-sent proofs.
-        let db = crate::db::db_open()?;
-        let dict_proofs = db.open_dict(crate::db::TABLE_PROOF_LIST)?;
+        let db = db_open()?;
+        let dict_proofs = db.open_dict(TABLE_PROOF_LIST)?;
 
         let dict_proofs_key = b"\x7c\x9c\x69\x8b\x81\x00\x0f\x15..metadata/key_array".to_vec();
         let mut dict_proofs_key_raw: Vec< Vec<u8> > = vec![];
@@ -118,6 +135,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
         dict_proofs.flush()?;
 
+        if cli_opts.fixed_diff.is_some() && cli_opts.fixed_secs.is_some() {
+            panic_exit!(10, "Note: --fixed-diff and --fixed-secs are exclusive and may not co-exist to avoid confusion.");
+        }
         loop {
             for (k, _) in &submit_proofs {
                 dict_proofs_key_raw.push( bincode::serialize(&k)? );
@@ -127,14 +147,67 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             dict_proofs.flush()?;
 
             let my_speed = compute_speed().await;
-            let my_difficulty = {
-                let auto = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
+            let my_diff_auto: usize = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
+
+            let my_diff_fixed: usize =
                 match cli_opts.fixed_diff {
-                    None => { auto },
-                    Some(diff) => { diff }
+                    None => { 0 },
+                    Some(diff) => { diff as usize }
+                };
+            let my_diff_secs: Option<u32> = cli_opts.fixed_secs;
+
+            let my_difficulty =
+                if my_diff_fixed <= 0 {
+                    my_diff_auto
+                } else if my_diff_fixed < my_diff_auto {
+                    let add = (my_diff_fixed - my_diff_auto) / 2;
+                    log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
+
+                    let my_diff_fixed = my_diff_fixed + add;
+                    if my_diff_fixed > my_diff_auto {
+                        my_diff_auto
+                    } else {
+                        my_diff_fixed
+                    }
+                } else {
+                    my_diff_fixed
+                };
+            let approx_round = {
+                let mut total: f64 = 2.0f64.powi(my_difficulty as _);
+
+                if let Some(approx) = my_diff_secs {
+                    let approx: f64 = approx.into();
+
+                    let mut offset = total / 200.0;
+                    if offset < 4096.0 { offset = 4096.0; } // min 2**12
+
+                    let mut out: f64 = total / my_speed;
+                    let mut count = 0;
+                    while (out - approx).abs() > 180.0 {
+                        // offset change up/down
+                        if out > approx {
+                            total -= offset;
+                        } else {
+                            total += offset;
+                        }
+
+                        out = total / my_speed;
+
+                        count += 1;
+                        if count > 10_000 {
+                            offset -= offset/10.0;
+                            // next 100 times
+                            count -= 100;
+                        }
+                        if count > 20_000 {
+                            // deadline
+                            break;
+                        }
+                    }
                 }
+
+                total / my_speed
             };
-            let approx_iter = 2.0f64.powi(my_difficulty as _) / my_speed;
 
             // Time to submit the proofs, first we store all proofs in disk. then for every proof in the batch, we attempt to submit it. If the submission fails, we move on, because there might be some weird race condition with melwalletd going on.
             // We also attempt to submit transactions in parallel. This is done by retrying always (with max count 3).
@@ -220,7 +293,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
             let summary = opts.wallet.summary().await?;
 
-            // If we have any erg, convert it all to mel.
+            // If we have any ERG (64), convert it all to MEL (6d).
             let our_ergs = summary.detailed_balance.get("64").copied().unwrap_or_default();
             if our_ergs > CoinValue(0) {
                 worker
@@ -231,13 +304,11 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             // check profit status, and/or quitting without incomes
-            mint_state.fee_failsafe(max_losts, quit_without_profit);
+            mint_state.fee_handler.failsafe();//max_losts, quit_without_profit);
 
             // skipping transfer profits if without payout address.
             if let Some(payout) = opts.payout {
-                //let our_mels = summary.detailed_balance.get("6d").copied().unwrap_or_default();
                 let our_mels: CoinValue = summary.total_micromel;
-
                 // If we have more than 1 MEL, transfer [half balance] to the backup wallet.
                 if our_mels > CoinValue::from_millions(1u8) {
                     let to_transfer = our_mels / 2;
@@ -272,7 +343,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
                     if cli_opts.fixed_diff.is_none() { "[auto]" } else { "[fixed]" },
                     my_difficulty,
-                    approx_iter,
+                    approx_round,
                 ),
             );
 
@@ -282,7 +353,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             let fastest_speed = client.snapshot().await?.current_header().dosc_speed as f64 / 30.0;
             worker.lock().unwrap().info(format!("Max speed on chain: {:.2} kH/s", fastest_speed / 1000.0));
 
-            let seed_ttl = mint_state.set_seed_expire(Duration::from_secs_f64(approx_iter*2.0));
+            let seed_ttl = mint_state.seed_handler.set_expire(Duration::from_secs_f64(approx_round*2.0));
             worker.lock().unwrap().info(format!("Seed TTL: {} blocks ({}s)", seed_ttl, seed_ttl*30));
             worker.lock().unwrap().info(format!("Minter Address: {}", summary.address));
             worker.lock().unwrap().info(format!("Minting Balance: {} MEL", summary.total_micromel));
@@ -300,7 +371,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .unwrap()
                     .add_child("generating seed UTXOs for minting...");
                 sub.init(None, None);
-                mint_state.generate_seeds(threads, bulk_seeds).await?;
+                mint_state.seed_handler.generate(threads, &mut mint_state.fee_handler).await?;
             }
 
             // repeat because wallet could be out of money
@@ -434,9 +505,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         (kh as f64) / ended,
 
                         // calculating deviation for improve the accuracy of predicted time spent...
-                        approx_iter,
+                        approx_round,
                         ended,
-                        approx_iter - ended,
+                        approx_round - ended,
                     );
 
                     std::mem::drop(speed_task);

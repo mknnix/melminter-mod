@@ -39,21 +39,27 @@ pub struct CmdOpts {
     #[structopt(long)]
     /// Whether melminter should be skipping the check that require balance >= 0.05 MEL
     pub skip_balance_check: bool,
-
     #[structopt(long)]
     /// Whether the negative-profit failsafe check should be disabled? (use for debugging only)
     pub disable_profit_failsafe: bool,
+    #[structopt(long)]
+    /// Whether to allow send any tx in any case? (defaults to disabled)
+    pub allow_any_tx: bool,
+    #[structopt(long)]
+    /// Disable all failsafe and no warns
+    pub no_failsafe: bool,
 
     #[structopt(long, default_value = "0.025")]
     /// Specify a "max lost" coins for balance safe (unit: MEL, for example 0.0321)
+    /// testnet default value = 5 MEL fixed
     pub balance_max_losts: String,
 
     #[structopt(long)]
-    /// Whether enable debug output
+    /// Whether enable debug output for all mods
     pub debug: bool,
 
     #[structopt(long)]
-    /// Whether exporting the secret key of mint wallet. (default: do nothing)
+    /// Whether exporting the secret key of mint wallet. (defaults to do nothing)
     /// maybe only useful for without payout option
     pub export_sk: bool,
 
@@ -62,7 +68,12 @@ pub struct CmdOpts {
     ///   (PLEASE NOTE: this value should be chosen carefully!
     ///   if you enter a too small value, your incomes may not be cover the expenses,
     ///   because the ERG you minted may not be enough to cover the network fee for doscMint transactions)
-    pub fixed_diff: Option<usize>,
+    pub fixed_diff: Option<u8>,
+    #[structopt(long)]
+    /// if provided, to control the approx time to specified seconds.
+    /// [fixed-secs and fixed-diff is cannot give both!]
+    /// PLEASE NOTE SEE --fixed-diff
+    pub fixed_secs: Option<u32>,
 
     #[structopt(long)]
     /// [EXPERIMENTAL] Whether melminter should be bulk to sent new-coin seeds tx...
