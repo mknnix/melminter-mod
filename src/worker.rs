@@ -382,6 +382,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .add_child("generating seed UTXOs for minting...");
                 sub.init(None, None);
                 mint_state.seed_handler.generate(threads, &mut mint_state.fee_handler).await?;
+                mint_state.seed_handler.height(client.snapshot().await?.current_header().height.0);
             }
 
             // repeat because wallet could be out of money

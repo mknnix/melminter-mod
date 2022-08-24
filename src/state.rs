@@ -432,22 +432,24 @@ impl SeedSchedule {
                             continue;
                         }
                     };
-                    assert!(coin_height <= current_height);
-                    if (current_height - coin_height) > ttl {
-                        log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
+                    if ! (coin_height <= current_height) {
+                        if (current_height - coin_height) > ttl {
+                            log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
 
-                        let th = id.txhash;
-                        let v: &mut Vec<(CoinID, CoinData)> =
-                            // get it directly if it exists. otherwise create a new Vec and return it
-                            if let Some(v) = self.expired.get_mut(&th) {
-                                v
-                            } else {
-                                self.expired.insert(th, vec![]);
-                                self.expired.get_mut(&th).unwrap()
-                            };
-
-                        v.push((id, data));
-                        continue;
+                            let th = id.txhash;
+                            let v: &mut Vec<(CoinID, CoinData)> =
+                                // get it directly if it exists. otherwise create a new Vec and return it
+                                if let Some(v) = self.expired.get_mut(&th) {
+                                    v
+                                } else {
+                                    self.expired.insert(th, vec![]);
+                                    self.expired.get_mut(&th).unwrap()
+                                };
+                            v.push((id, data));
+                            continue;
+                        }
+                    } else {
+                        log::error!("seed_raw: current block num is less than seed located! still using");
                     }
                 }
                 seeds.push(id);
