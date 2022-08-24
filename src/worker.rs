@@ -355,6 +355,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 ),
             );
 
+            let summary = opts.wallet.summary().await?;
+
             let threads = opts.threads;
             let fastest_speed = client.snapshot().await?.current_header().dosc_speed as f64 / 30.0;
             worker.lock().unwrap().info(format!("Max speed on chain: {:.2} kH/s", fastest_speed / 1000.0));
@@ -362,6 +364,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             let seed_ttl = mint_state.seed_handler.set_expire(Duration::from_secs_f64(approx_round*2.0));
             worker.lock().unwrap().info(format!("Seed TTL: {} blocks ({}s)", seed_ttl, seed_ttl*30));
             worker.lock().unwrap().info(format!("Minter Address: {}", summary.address));
+            worker.lock().unwrap().info(format!("Minting Balance: {} MEL", summary.total_micromel));
 
             // if requested, stopping before generate seed
             if recv_stop.try_recv().is_ok() {
@@ -461,8 +464,14 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             let mel_balance = summary.detailed_balance.get("6d").unwrap();
 
                             let mut new = worker.lock().unwrap().add_child(
-                                format!( "current progress: {:.2} % | fee reserve: {} MEL | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
-                                         (curr_sum/total_sum) * 100.0, mel_balance,
+                                format!( "current progress: {:.2} % (lefts? {:.1}s) | fee reserve: {} MEL | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
+                                         (curr_sum/total_sum) * 100.0,
+                                         {
+                                             let used = (curr_sum/total_sum) * approx_iter;
+                                             let left = approx_iter - used;
+                                             left
+                                         },
+                                         mel_balance,
                                          dosc_per_day, erg_per_day, mel_per_day
                                 )
                             );
