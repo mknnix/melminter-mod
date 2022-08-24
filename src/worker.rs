@@ -167,10 +167,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 if my_diff_fixed <= 0 {
                     my_diff_auto
                 } else if my_diff_fixed < my_diff_auto {
-                    let add = (my_diff_auto - my_diff_fixed) / 2;
-                    log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
-
-                    let my_diff_fixed = my_diff_fixed + add;
+//                    let add = (my_diff_auto - my_diff_fixed) / 2;
+//                    log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
+//                    let my_diff_fixed = my_diff_fixed + add;
                     if my_diff_fixed > my_diff_auto {
                         my_diff_auto
                     } else {
@@ -294,7 +293,6 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             let snapshot = client.snapshot().await?;
-            mint_state.seed_handler.height(snapshot.current_header().height.0);
 
             let erg_to_mel = snapshot
                 .get_pool(PoolKey::mel_and(Denom::Erg))
@@ -314,7 +312,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             // check profit status, and/or quitting without incomes
-            mint_state.fee_handler.failsafe();//max_losts, quit_without_profit);
+            mint_state.fee_handler.failsafe();
 
             // skipping transfer profits if without payout address.
             if let Some(payout) = opts.payout {
@@ -381,8 +379,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .unwrap()
                     .add_child("generating seed UTXOs for minting...");
                 sub.init(None, None);
-                mint_state.seed_handler.generate(threads, &mut mint_state.fee_handler).await?;
-                mint_state.seed_handler.height(client.snapshot().await?.current_header().height.0);
+                mint_state.seed_handler.generate(client.clone(), threads, &mut mint_state.fee_handler).await?;
             }
 
             // repeat because wallet could be out of money
