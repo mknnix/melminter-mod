@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 use themelio_structs::{CoinID, CoinDataHeight};
 
 // filename of database, all db.rs logic need store to one file, does not create others unless major changes to format/function/goals (then these need split to a new .rs file)
-pub const DB_FILENAME: &str = "melminterdb_sqlite3";
+pub const DB_FILENAME: &str = "melmintdb_sqlite3";
 
 // here store the proofs wait queue (please marked done for each sent tx, and auto clean any expires completes they useless)
 pub const TABLE_PROOF_LIST: &str = "try_send_proofs";
