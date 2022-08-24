@@ -61,14 +61,14 @@ pub enum WhatLog {
     Test, // for debugging of test.rs
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TrySendProof {
     // Proof submitting format
     pub coin: CoinID,
     pub data: CoinDataHeight,
     pub proof: Vec<u8>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TrySendProofState {
     pub fails: u8, // total failed count, only add ops (no any other)
     pub created: SystemTime, // tx prepare time (but not sent)

@@ -122,16 +122,23 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         }
 
         // A queue for any proofs that waiting to submit (global store / also possible from disk...)
-        let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = VecDeque::new();
+        let mut submit_proofs: HashMap<TrySendProof, TrySendProofState> = HashMap::new();
         for key in &dict_proofs_key_raw {
             if let Some(val) = dict_proofs.get(&key)? {
                 let key = bincode::deserialize(&key)?;
                 let val = bincode::deserialize(&val)?;
-                submit_proofs.push_back( (key, val) );
+                submit_proofs.insert(key, val);
             } else {
                 log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value!", key);
             }
         }
+        let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = {
+            let mut o = VecDeque::new();
+            for (k, v) in submit_proofs {
+                o.push_back((k, v));
+            }
+            o
+        };
 
         dict_proofs.flush()?;
 
@@ -160,7 +167,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 if my_diff_fixed <= 0 {
                     my_diff_auto
                 } else if my_diff_fixed < my_diff_auto {
-                    let add = (my_diff_fixed - my_diff_auto) / 2;
+                    let add = (my_diff_auto - my_diff_fixed) / 2;
                     log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
 
                     let my_diff_fixed = my_diff_fixed + add;
@@ -263,6 +270,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         let trys_key = bincode::serialize(&trys)?;
                         let trys_val = bincode::serialize(&tryst)?;
                         dict_proofs.insert(trys_key, trys_val)?;
+                        dict_proofs.flush()?;
                     }
 
                     smol::Timer::after(Duration::from_secs(1)).await;
