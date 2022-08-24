@@ -94,14 +94,17 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         let allow_any_tx =         if is_testnet { true } else { cli_opts.allow_any_tx };
 
         // initial mint state with fee policy
-        let mut mint_state = MintState::new(is_testnet, opts.wallet.clone(), client.clone(),
+        let mut mint_state = MintState::new(opts.wallet.clone(), client.clone(),
             FeeSchedule {
                 allow_any_tx,
                 history: vec![],
                 max_lost: max_losts,
                 quit: quit_without_profit,
-                no_failsafe: false
+                no_failsafe,
             });
+        if bulk_seeds {
+            mint_state.seed_handler.bulk();
+        }
 
         // establish a connection to local disk storage for saves un-sent proofs.
         let db = db_open()?;
@@ -146,7 +149,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             let my_speed = compute_speed().await;
             let my_diff_auto: usize = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
 
-            let mut my_diff_fixed: usize =
+            let my_diff_fixed: usize =
                 match cli_opts.fixed_diff {
                     None => { 0 },
                     Some(diff) => { diff as usize }
@@ -178,7 +181,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     let mut offset = total / 200.0;
                     if offset < 4096.0 { offset = 4096.0; } // min 2**12
 
-                    let mut out: f64 = (total / my_speed);
+                    let mut out: f64 = total / my_speed;
                     let mut count = 0;
                     while (out - approx).abs() > 180.0 {
                         // offset change up/down

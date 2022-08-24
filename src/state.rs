@@ -22,7 +22,6 @@ use crate::{repeat_fallible, panic_exit, new_void_address, new_null_dst};
 pub struct MintState {
     wallet: WalletState, // wrapped wallet add more function (dual-unlock, mel-only-or-0, )
     client: ValClient, // connect for a blockchain node
-    testnet: bool, // Whether use testnet rules
     pub fee_handler: FeeSchedule,
     pub seed_handler: SeedSchedule,
 }
@@ -34,7 +33,7 @@ struct PrepareReq {
 }
 
 impl MintState {
-    pub fn new(testnet: bool, wallet: WalletClient, client: ValClient, fee: FeeSchedule) -> Self {
+    pub fn new(wallet: WalletClient, client: ValClient, fee: FeeSchedule) -> Self {
         let ws = WalletState (wallet);
         Self {
             wallet: ws.clone(),
@@ -53,7 +52,6 @@ impl MintState {
                 send_bulk: false,
                 block_height: None,
             },
-            testnet,
         }
     }
 
@@ -321,7 +319,7 @@ impl SeedSchedule {
         if secs < min { secs = min; }
         if secs > max { secs = max; }
 
-        /// ttl-blocks = expire-time / block-interval (all time units seconds)
+        // ttl-blocks = expire-time / block-interval (all time units seconds)
         let blocks = secs / 30;
 
         self.ttl = Some(blocks);
@@ -413,13 +411,13 @@ impl SeedSchedule {
         }
     }
 
-    // caller needs provide current block number
+    // caller needs provide current block number: self.height(num)
     async fn raw(&mut self) -> surf::Result<Vec<CoinID>> {
         let unspent_coins = self.wallet.0.get_coins().await?;
 
         // valclient.snapshot().await?.current_header().height.0;
         let current_height = if let Some(height) = self.block_height { height } else {
-            panic_exit!(11, "cannot get current chain height! caller must privode one uses .height()");
+            panic_exit!(11, "cannot get current chain height! caller must privode one uses self.height()");
         };
 
         let mut seeds = vec![];
