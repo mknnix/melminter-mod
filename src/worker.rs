@@ -294,6 +294,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             let snapshot = client.snapshot().await?;
+            mint_state.seed_handler.height(snapshot.current_header().height.0);
+
             let erg_to_mel = snapshot
                 .get_pool(PoolKey::mel_and(Denom::Erg))
                 .await?
