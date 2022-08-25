@@ -264,6 +264,12 @@ impl DictMap {
             return Ok(HashSet::new());
         }
     }
+
+    pub fn flush(&self) -> anyhow::Result<()> {
+        let dict = self.dict.as_ref().unwrap().as_ref();
+        dict.flush()?;
+        Ok(())
+    }
 }
 
 /// a public interface for outside
@@ -302,21 +308,23 @@ impl Map {
         if self.lowercase {
             k = k.to_ascii_lowercase();
         }
-        DictMap::to_key(k.as_bytes())
+        let k = bincode::serialize(&k)?;
+        DictMap::to_key(&k)
     }
 
-    pub fn get<T: DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option< Box<T> >> {
-        let k = self.to_key(key)?;
+    pub fn get<K: Serialize, V: DeserializeOwned>(&self, key: K) -> anyhow::Result<Option< Box<V> >> {
+        let k = bincode::serialize(&key)?;
         if let Some(v) = self.cur().get(&k)? {
-            let v: T = bincode::deserialize(&v)?;
-            Ok(Some( Box::new(v) ))
+            let out: V = bincode::deserialize(&v)?;
+            Ok(Some( Box::new(out) ))
         } else {
             Ok(None)
         }
     }
-    pub fn set<T: Serialize>(&mut self, key: &str, value: T) -> anyhow::Result<()> {
-        let k = self.to_key(key)?;
-        self.cur().set( &k, &bincode::serialize(&value)? )?;
+    pub fn set<K: Serialize, V: Serialize>(&mut self, key: K, value: V) -> anyhow::Result<()> {
+        let k = bincode::serialize(&key)?;
+        let v = bincode::serialize(&value)?;
+        self.cur().set( &k, &v );
         Ok(())
     }
 
@@ -346,15 +354,30 @@ impl Map {
         self.curr = None;
     }
 
+    /// try flush all dicts
+    pub fn flush(&mut self) -> anyhow::Result<()> {
+        for dict in &mut self.dicts {
+            if ! dict.is_closed() {
+                dict.flush()?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// delete all-or-one [object of mapping], give some name to option, otherwise all.
     pub fn clean(&mut self, name: Option<&str>) {
         if let Some(n) = name {
+            if self.cur().name == n {
+                self.no_dict();
+            }
             for it in &mut self.dicts {
                 if it.name == n {
                     it.close();
                 }
             }
         } else {
+            self.no_dict();
             for it in &mut self.dicts {
                 it.close();
             }
