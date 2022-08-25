@@ -122,16 +122,23 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         }
 
         // A queue for any proofs that waiting to submit (global store / also possible from disk...)
-        let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = VecDeque::new();
+        let mut submit_proofs: HashMap<TrySendProof, TrySendProofState> = HashMap::new();
         for key in &dict_proofs_key_raw {
             if let Some(val) = dict_proofs.get(&key)? {
                 let key = bincode::deserialize(&key)?;
                 let val = bincode::deserialize(&val)?;
-                submit_proofs.push_back( (key, val) );
+                submit_proofs.insert(key, val);
             } else {
                 log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value!", key);
             }
         }
+        let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = {
+            let mut o = VecDeque::new();
+            for (k, v) in submit_proofs {
+                o.push_back((k, v));
+            }
+            o
+        };
 
         dict_proofs.flush()?;
 
@@ -160,10 +167,9 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 if my_diff_fixed <= 0 {
                     my_diff_auto
                 } else if my_diff_fixed < my_diff_auto {
-                    let add = (my_diff_fixed - my_diff_auto) / 2;
-                    log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
-
-                    let my_diff_fixed = my_diff_fixed + add;
+//                    let add = (my_diff_auto - my_diff_fixed) / 2;
+//                    log::warn!("fixed diff is less than auto detected ({} < {}). higher fixed using [half of offset: {}]", my_diff_fixed, my_diff_auto, add);
+//                    let my_diff_fixed = my_diff_fixed + add;
                     if my_diff_fixed > my_diff_auto {
                         my_diff_auto
                     } else {
@@ -263,6 +269,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         let trys_key = bincode::serialize(&trys)?;
                         let trys_val = bincode::serialize(&tryst)?;
                         dict_proofs.insert(trys_key, trys_val)?;
+                        dict_proofs.flush()?;
                     }
 
                     smol::Timer::after(Duration::from_secs(1)).await;
@@ -286,6 +293,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             let snapshot = client.snapshot().await?;
+
             let erg_to_mel = snapshot
                 .get_pool(PoolKey::mel_and(Denom::Erg))
                 .await?
@@ -304,7 +312,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
 
             // check profit status, and/or quitting without incomes
-            mint_state.fee_handler.failsafe();//max_losts, quit_without_profit);
+            mint_state.fee_handler.failsafe();
 
             // skipping transfer profits if without payout address.
             if let Some(payout) = opts.payout {
@@ -347,6 +355,8 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 ),
             );
 
+            let summary = opts.wallet.summary().await?;
+
             let threads = opts.threads;
             let fastest_speed = client.snapshot().await?.current_header().dosc_speed as f64 / 30.0;
             worker.lock().unwrap().info(format!("Max speed on chain: {:.2} kH/s", fastest_speed / 1000.0));
@@ -354,6 +364,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             let seed_ttl = mint_state.seed_handler.set_expire(Duration::from_secs_f64(approx_round*2.0));
             worker.lock().unwrap().info(format!("Seed TTL: {} blocks ({}s)", seed_ttl, seed_ttl*30));
             worker.lock().unwrap().info(format!("Minter Address: {}", summary.address));
+            worker.lock().unwrap().info(format!("Minting Balance: {} MEL", summary.total_micromel));
 
             // if requested, stopping before generate seed
             if recv_stop.try_recv().is_ok() {
@@ -368,7 +379,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     .unwrap()
                     .add_child("generating seed UTXOs for minting...");
                 sub.init(None, None);
-                mint_state.seed_handler.generate(threads, &mut mint_state.fee_handler).await?;
+                mint_state.seed_handler.generate(client.clone(), threads, &mut mint_state.fee_handler).await?;
             }
 
             // repeat because wallet could be out of money
@@ -453,8 +464,14 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                             let mel_balance = summary.detailed_balance.get("6d").unwrap();
 
                             let mut new = worker.lock().unwrap().add_child(
-                                format!( "current progress: {:.2} % | fee reserve: {} MEL | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
-                                         (curr_sum/total_sum) * 100.0, mel_balance,
+                                format!( "current progress: {:.2} % (lefts? {:.1}s) | fee reserve: {} MEL | expected daily return: {:.3} DOSC ≈ {:.3} ERG ≈ {:.3} MEL",
+                                         (curr_sum/total_sum) * 100.0,
+                                         {
+                                             let used = (curr_sum/total_sum) * approx_round;
+                                             let left = approx_round - used;
+                                             left
+                                         },
+                                         mel_balance,
                                          dosc_per_day, erg_per_day, mel_per_day
                                 )
                             );

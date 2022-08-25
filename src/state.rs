@@ -50,7 +50,6 @@ impl MintState {
                 expired: HashMap::new(),
                 covnull: Some(new_null_dst()),
                 send_bulk: false,
-                block_height: None,
             },
         }
     }
@@ -68,8 +67,7 @@ impl MintState {
 
         // we do not need to save the expired seeds, so just clone
         let curr_height = self.client.snapshot().await?.current_header().height.0;
-        let mut seh = self.seed_handler.clone(); seh.height(curr_height);
-        let seeds = seh.raw().await?;
+        let seeds = self.seed_handler.clone().raw(curr_height).await?;
 
         let on_progress = Arc::new(on_progress);
         let mut proof_thrs = Vec::new();
@@ -294,16 +292,10 @@ pub struct SeedSchedule {
     pub wallet: WalletState,
     /// bulk send
     pub send_bulk: bool,
-    /// blockchain current number
-    pub block_height: Option<u64>,
 }
 impl SeedSchedule {
     pub fn bulk(&mut self) {
         self.send_bulk = true;
-    }
-
-    pub fn height(&mut self, h: u64) {
-        self.block_height = Some(h);
     }
 
     /// caller provides Duration; method returns **current** TTL value.
@@ -327,13 +319,13 @@ impl SeedSchedule {
     }
 
     /// Generates a list of "seed" coins.
-    pub async fn generate(&mut self, threads: usize, fee_handler: &mut FeeSchedule) -> surf::Result<()> {
+    pub async fn generate(&mut self, client: ValClient, threads: usize, fee_handler: &mut FeeSchedule) -> surf::Result<()> {
         self.wallet.unlock().await?;
         let bulk = self.send_bulk;
 
         let my_address = self.wallet.0.summary().await?.address;
         loop {
-            let toret = self.raw().await?;
+            let toret = self.raw(client.snapshot().await?.current_header().height.0).await?;
             if toret.len() >= threads {
                 return Ok(());
             }
@@ -412,13 +404,11 @@ impl SeedSchedule {
     }
 
     // caller needs provide current block number: self.height(num)
-    async fn raw(&mut self) -> surf::Result<Vec<CoinID>> {
+    async fn raw(&mut self, height: u64) -> surf::Result<Vec<CoinID>> {
         let unspent_coins = self.wallet.0.get_coins().await?;
 
         // valclient.snapshot().await?.current_header().height.0;
-        let current_height = if let Some(height) = self.block_height { height } else {
-            panic_exit!(11, "cannot get current chain height! caller must privode one uses self.height()");
-        };
+        let current_height = height;
 
         let mut seeds = vec![];
         for (id, data) in unspent_coins {
@@ -432,22 +422,24 @@ impl SeedSchedule {
                             continue;
                         }
                     };
-                    assert!(coin_height <= current_height);
-                    if (current_height - coin_height) > ttl {
-                        log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
+                    if ! (coin_height <= current_height) {
+                        if (current_height - coin_height) > ttl {
+                            log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
 
-                        let th = id.txhash;
-                        let v: &mut Vec<(CoinID, CoinData)> =
-                            // get it directly if it exists. otherwise create a new Vec and return it
-                            if let Some(v) = self.expired.get_mut(&th) {
-                                v
-                            } else {
-                                self.expired.insert(th, vec![]);
-                                self.expired.get_mut(&th).unwrap()
-                            };
-
-                        v.push((id, data));
-                        continue;
+                            let th = id.txhash;
+                            let v: &mut Vec<(CoinID, CoinData)> =
+                                // get it directly if it exists. otherwise create a new Vec and return it
+                                if let Some(v) = self.expired.get_mut(&th) {
+                                    v
+                                } else {
+                                    self.expired.insert(th, vec![]);
+                                    self.expired.get_mut(&th).unwrap()
+                                };
+                            v.push((id, data));
+                            continue;
+                        }
+                    } else {
+                        log::error!("seed_raw: current block num is less than seed located! still using");
                     }
                 }
                 seeds.push(id);

@@ -10,7 +10,8 @@ use serde::{Serialize, Deserialize};
 use themelio_structs::{CoinID, CoinDataHeight};
 
 // filename of database, all db.rs logic need store to one file, does not create others unless major changes to format/function/goals (then these need split to a new .rs file)
-pub const DB_FILENAME: &str = "melminterdb_sqlite3";
+pub const DB_FILENAME: &str = "melmintdb_sqlite3";
+
 // table name for metadatas, for now store key list
 // format: [table]: (kind) -> (value)
 pub const TABLE_METADATA: &str = "_metadata";
@@ -79,14 +80,14 @@ pub enum WhatLog {
     Test, // for debugging of test.rs
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TrySendProof {
     // Proof submitting format
     pub coin: CoinID,
     pub data: CoinDataHeight,
     pub proof: Vec<u8>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TrySendProofState {
     pub fails: u8, // total failed count, only add ops (no any other)
     pub created: SystemTime, // tx prepare time (but not sent)

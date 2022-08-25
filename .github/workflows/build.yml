@@ -11,6 +11,7 @@ env:
 
 jobs:
   cross:
+    needs: amd64-linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -20,7 +21,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
 
@@ -188,6 +189,11 @@ jobs:
           mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
           git switch master
           git reset --hard ${{github.sha}}
+          if git log -1 | grep -F "auto-submit}"
+          then
+            echo "Skip any auto commit by bots"
+            exit 100
+          fi
 
       - name: Build Linux
         run: for i in {1..5};do echo try build $i; cargo build --release --verbose && break;done;
@@ -211,7 +217,15 @@ jobs:
           git switch master
           git reset --hard ${{github.sha}}
 
+      - name:
+        run: |
+          python3 ./gitsha-incode.py
+          git add -A
+          git commit -m '{CI-auto-submit} Add git sha to build.rs'
+          git push origin master
+
   amd64-linux-musl:
+    needs: amd64-linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -221,7 +235,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
 
@@ -251,6 +265,7 @@ jobs:
           git reset --hard ${{github.sha}}
 
   amd64-windows:
+    needs: amd64-linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -261,7 +276,7 @@ jobs:
           git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
         shell: bash
@@ -288,6 +303,7 @@ jobs:
         shell: bash
 
   amd64-mac:
+    needs: amd64-linux
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
@@ -297,7 +313,7 @@ jobs:
           git config --global user.name github-actions && git config --global user.email github-actions@github.com
           git switch --orphan bin && git pull origin bin
           git switch bin
-          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/
+          mkdir bin/$(git log -1 --format="%cd" --date=format:"%Y-%m-%d_%H-%M-%S" ${{github.sha}})__${{github.sha}}/ || echo "use found bin dir"
           git switch master
           git reset --hard ${{github.sha}}
       
