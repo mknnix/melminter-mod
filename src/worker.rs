@@ -8,7 +8,7 @@ use std::{
 use crate::{
     repeat_fallible,
     state::{MintState, FeeSchedule},
-    db::{self, TrySendProof, TrySendProofState, db_open, TABLE_PROOF_LIST},
+    db::{self, TrySendProof, TrySendProofState, TABLE_PROOF_LIST},
     CmdOpts,
     panic_exit
 };

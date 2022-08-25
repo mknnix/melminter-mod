@@ -87,20 +87,27 @@ impl MintState {
             let chi = tmelcrypt::hash_keyed(&tip_header_hash, &seed.stdcode());
             let on_progress = on_progress.clone();
 
-            //#[cfg(target_os="android")]
-            let proof_fut = std::thread::spawn(move || {
+            let proof_fut = std::thread::Builder::new().name(format!("Mint-{}", idx)).spawn(move || {
                 if ThreadPriority::Min.set_for_current().is_err() {
-                    if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch)) {
-                        let sets = ThreadPriority::from_posix(ScheduleParams { sched_priority: n }).set_for_current();
-                        log::info!("thread n set nice result {:?}", sets);
-                    } else {
-                        log::info!("cannot get min nice for current system");
+                    #[cfg(not(target_os="linux"))]
+                    {
+                        //TODO
+                        log::info!("mint thread cannot set lower nice value (platform-specified)");
+                    }
+
+                    #[cfg(target_os="linux")]
+                    {
+                        if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch)) {
+                            let sets = ThreadPriority::from_posix(ScheduleParams { sched_priority: n }).set_for_current();
+                            log::info!("thread n set nice result {:?}", sets);
+                        } else {
+                            log::info!("cannot get min nice for linux");
+                        }
                     }
                 } else {
                     log::info!("ok change priority to low for mint");
                 }
 
-                //log::info!("for android the auto lower nice is disabled due to un-resolved issue, you need to manual set it (uses 'nice' command)");
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
@@ -114,32 +121,7 @@ impl MintState {
                         Tip910MelPowHash,
                     ),
                 )
-            });
-
-            /*
-            //#[cfg(not(target_os="android"))]
-            let proof_fut: std::thread::JoinHandle<_> = thread_priority::ThreadBuilder::default()
-                .name( format!("Minting-{}", idx) )
-                .priority(ThreadPriority::Min)
-                .spawn(move |nice_result| {
-                    // logging the result of thread nice set...
-                    log::info!("Minting thread ({}) set Minimum priority: result {:?}", idx, nice_result);
-
-                    (
-                        tip_cdh,
-                        melpow::Proof::generate_with_progress(
-                            &chi,
-                            difficulty,
-                            |progress| {
-                                if fastrand::f64() < 0.1 {
-                                    on_progress(idx, progress)
-                                }
-                            },
-                            Tip910MelPowHash,
-                        ),
-                    )
-                })?;
-                */
+            })?;
 
             proof_thrs.push(proof_fut);
         }
