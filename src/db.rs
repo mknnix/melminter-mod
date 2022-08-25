@@ -288,6 +288,38 @@ impl Map {
         self.lowercase = true;
     }
 
+    /// get current DictMap (Arc-pointer just clone)
+    pub fn cur(&self) -> DictMap {
+        if let Some(ptr) = self.curr {
+            self.dicts[ptr].clone()
+        } else {
+            panic!("no current map sets!");
+        }
+    }
+
+    pub fn to_key(&self, key: &str) -> anyhow::Result<Vec<u8>> {
+        let mut k = key.to_string();
+        if self.lowercase {
+            k = k.to_ascii_lowercase();
+        }
+        DictMap::to_key(k.as_bytes())
+    }
+
+    pub fn get<'ade, T: Clone + Deserialize<'ade>>(&self, key: &str) -> anyhow::Result<Option< Box<T> >> {
+        let k = self.to_key(key)?;
+        if let Some(v) = self.cur().get(&k)? {
+            let v: Box<T> = Box::new( bincode::deserialize::<T>(&v.clone())? );
+            Ok(Some(v))
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn set<T: Serialize>(&mut self, key: &str, value: T) -> anyhow::Result<()> {
+        let k = self.to_key(key)?;
+        self.cur().set( &k, &bincode::serialize(&value)? )?;
+        Ok(())
+    }
+
     /// changes current dict mapping to specified name
     pub fn dict(&mut self, name: &str) -> anyhow::Result<()> {
         for i in 0 .. self.dicts.len() {
