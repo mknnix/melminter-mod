@@ -160,10 +160,9 @@ pub struct DictMap {
 }
 impl DictMap {
     pub fn open(name: &str) -> anyhow::Result<Self> {
-        let dict = dict_open(name)?;
         Ok(Self {
-            md_keylist: "_metadata_keys".as_bytes().to_vec(),
-            dict,
+            md_keylist: (TABLE_METADATA+".keys").as_bytes().to_vec(),
+            dict: dict_open(name)?,
             name: name.to_string(),
         })
     }
