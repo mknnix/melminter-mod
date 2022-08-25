@@ -2,7 +2,7 @@ fn git_commit_hash() -> String {
     #[allow(unused_variables)]
 
     let static_git_sha = "[[Replaceit]]";
-let static_git_sha = "git.c9ba55ca3954ed9b16650137a8d4fc4a41bc9575"; //CODEADD// by gitsha in code
+let static_git_sha = "git.3c0e28e19e6e8e0b00f67dc71840a7c1fc7b4f70"; //CODEADD// by gitsha in code
 
     if env!("CARGO_PKG_VERSION").to_ascii_lowercase().contains("alpha") == false {
         return "release".to_string();
