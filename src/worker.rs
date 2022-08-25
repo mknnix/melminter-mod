@@ -8,7 +8,7 @@ use std::{
 use crate::{
     repeat_fallible,
     state::{MintState, FeeSchedule},
-    db::{TrySendProof, TrySendProofState, db_open, TABLE_PROOF_LIST},
+    db::{self, TrySendProof, TrySendProofState, TABLE_PROOF_LIST},
     CmdOpts,
     panic_exit
 };
@@ -107,31 +107,28 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         }
 
         // establish a connection to local disk storage for saves un-sent proofs.
-        let db = db_open()?;
-        let dict_proofs = db.open_dict(TABLE_PROOF_LIST)?;
 
-        let dict_proofs_key = b"\x7c\x9c\x69\x8b\x81\x00\x0f\x15..metadata/key_array".to_vec();
-        let mut dict_proofs_key_raw: Vec< Vec<u8> > = vec![];
+        /*let db = db_open()?;*/
+        // create mapping for db
+        let mut map = db::Map::new();
+        map.lower();
 
-        if let Some(raw) = dict_proofs.get(&dict_proofs_key)? {
-            dict_proofs_key_raw = bincode::deserialize(&raw)?;
-            dict_proofs_key_raw.dedup();
-        } else {
-            let v = bincode::serialize(&dict_proofs_key_raw)?;
-            dict_proofs.insert(dict_proofs_key.clone(), v)?;
-        }
+        //let dict_proofs = db.open_dict(TABLE_PROOF_LIST)?;
+        map.dict(TABLE_PROOF_LIST)?;
 
         // A queue for any proofs that waiting to submit (global store / also possible from disk...)
         let mut submit_proofs: HashMap<TrySendProof, TrySendProofState> = HashMap::new();
-        for key in &dict_proofs_key_raw {
-            if let Some(val) = dict_proofs.get(&key)? {
-                let key = bincode::deserialize(&key)?;
-                let val = bincode::deserialize(&val)?;
-                submit_proofs.insert(key, val);
+        // init load from disk
+        for key in map.cur().keys()? {
+            let key = bincode::deserialize(&key)?;
+            if let Some(val) = map.get(&key)? {
+                submit_proofs.insert(key, *val);
             } else {
-                log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value!", key);
+                log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value! CHECK METADATA LOGIC", key);
             }
         }
+
+        // convert to Vec Deque
         let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = {
             let mut o = VecDeque::new();
             for (k, v) in submit_proofs {
@@ -139,19 +136,13 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             }
             o
         };
-
-        dict_proofs.flush()?;
+        //map.flush()?;
 
         if cli_opts.fixed_diff.is_some() && cli_opts.fixed_secs.is_some() {
             panic_exit!(10, "Note: --fixed-diff and --fixed-secs are exclusive and may not co-exist to avoid confusion.");
         }
         loop {
-            for (k, _) in &submit_proofs {
-                dict_proofs_key_raw.push( bincode::serialize(&k)? );
-            }
-            dict_proofs_key_raw.dedup();
-            dict_proofs.insert( dict_proofs_key.clone(), bincode::serialize(&dict_proofs_key_raw)? )?;
-            dict_proofs.flush()?;
+            map.flush()?;
 
             let my_speed = compute_speed().await;
             let my_diff_auto: usize = (my_speed * if is_testnet { 120.0 } else { 30000.0 }).log2().ceil() as usize;
@@ -265,12 +256,13 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                         }
                     }
 
-                    {
+                    /*{
                         let trys_key = bincode::serialize(&trys)?;
                         let trys_val = bincode::serialize(&tryst)?;
                         dict_proofs.insert(trys_key, trys_val)?;
                         dict_proofs.flush()?;
-                    }
+                    }*/
+                    map.set(trys, tryst)?;
 
                     smol::Timer::after(Duration::from_secs(1)).await;
                 }
@@ -533,15 +525,11 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                     failed: false,
                     errors: vec![],
                 };
-
-                {
-                    let trys_key: Vec<u8> = bincode::serialize(&trys)?;
-                    let trys_val: Vec<u8> = bincode::serialize(&tryst)?;
-                    dict_proofs.insert(trys_key, trys_val)?;
-                }
+                
+                map.set(trys.clone(), tryst.clone())?;
                 submit_proofs.push_back((trys, tryst));
             }
-            dict_proofs.flush()?;
+//            dict_proofs.flush()?;
         }
 
         return Ok::<_, surf::Error>(()); // this unreachable code used to infer generic types of function repeat_fallible
