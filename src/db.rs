@@ -7,7 +7,7 @@ use boringdb;
 use dirs;
 use anyhow::Context;
 
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use themelio_structs::{CoinID, CoinDataHeight};
 
 // filename of database, all db.rs logic need store to one file, does not create others unless major changes to format/function/goals (then these need split to a new .rs file)
@@ -305,11 +305,11 @@ impl Map {
         DictMap::to_key(k.as_bytes())
     }
 
-    pub fn get<'ade, T: Clone + Deserialize<'ade>>(&self, key: &str) -> anyhow::Result<Option< Box<T> >> {
+    pub fn get<T: DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option< Box<T> >> {
         let k = self.to_key(key)?;
         if let Some(v) = self.cur().get(&k)? {
-            let v: Box<T> = Box::new( bincode::deserialize::<T>(&v.clone())? );
-            Ok(Some(v))
+            let v: T = bincode::deserialize(&v)?;
+            Ok(Some( Box::new(v) ))
         } else {
             Ok(None)
         }
