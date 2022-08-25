@@ -292,13 +292,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 }
             }
 
-            let snapshot = client.snapshot().await?;
-
-            let erg_to_mel = snapshot
-                .get_pool(PoolKey::mel_and(Denom::Erg))
-                .await?
-                .expect("must have erg-mel pool");
-
+            let erg_to_mel = client.snapshot().await?.get_pool(PoolKey::mel_and(Denom::Erg)).await?.expect("must have erg-mel pool");
             let summary = opts.wallet.summary().await?;
 
             // If we have any ERG (64), convert it all to MEL (6d).
@@ -382,13 +376,15 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
                 mint_state.seed_handler.generate(client.clone(), threads, &mut mint_state.fee_handler).await?;
             }
 
+            let batch_snapshot = client.snapshot().await?;
             // repeat because wallet could be out of money
             let batch: Vec<(CoinID, CoinDataHeight, Vec<u8>)> = repeat_fallible(|| {
                 let mint_state = &mint_state;
                 let subworkers = Arc::new(DashMap::new());
                 let worker = worker.clone();
 
-                let total = 100 * (1usize << (my_difficulty.saturating_sub(10)));
+                let total = 100 * (1usize << ( my_difficulty.saturating_sub(10) ));
+                let snapshot = batch_snapshot.clone();
 
                 // background task that tallies speeds
                 let speed_task: Arc<Task<()>> = {
