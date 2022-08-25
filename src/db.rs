@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use std::collections::{HashSet, HashMap};
 
 use boringdb;
 use dirs;
@@ -10,6 +11,9 @@ use themelio_structs::{CoinID, CoinDataHeight};
 
 // filename of database, all db.rs logic need store to one file, does not create others unless major changes to format/function/goals (then these need split to a new .rs file)
 pub const DB_FILENAME: &str = "melminterdb_sqlite3";
+// table name for metadatas, for now store key list
+// format: [table]: (kind) -> (value)
+pub const TABLE_METADATA: &str = "_metadata";
 
 // here store the proofs wait queue (please marked done for each sent tx, and auto clean any expires completes they useless)
 pub const TABLE_PROOF_LIST: &str = "try_send_proofs";
@@ -23,6 +27,20 @@ pub const TABLE_BALANCES:   &str = "balance_history";
 /* All data formats:
  * No Any functions about to format/serde/generating-value.
  * just struct only. */
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Metadata {
+    table: String, // the name of table, or empty for global metadata table
+    kind: MetadataKind, // what type of this data, and that enum also data provided
+    info: String, // extra info for this
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MetadataKind {
+    Log(LogRecord),
+    Nothing,
+    KeyList(HashSet<Vec<u8>>),
+    // come soon...
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogRecord {
@@ -114,5 +132,86 @@ pub fn db_open() -> anyhow::Result<boringdb::Database> {
 pub fn dict_open(name: &str) -> anyhow::Result<boringdb::Dict> {
     let db = db_open()?;
     Ok( db.open_dict(name)? )
+}
+
+/*
+pub struct Meta {
+    inner: boringdb::Dict,
+    table: String,
+}
+impl Meta {
+    pub fn new() -> anyhow::Result<boringdb::Dict> {
+        db_open(TABLE_METADATA)?
+    }
+
+    pub fn list_keys(&self) -> HashSet<Vec<u8>> {
+        let mut out = HashSet::new();
+        for md in self.inner.get()
+    }
+}
+*/
+
+#[derive(Clone)]
+pub struct DictMap {
+    md_keylist: Vec<u8>,
+    dict: boringdb::Dict,
+    name: String,
+}
+impl DictMap {
+    pub fn open(name: &str) -> anyhow::Result<Self> {
+        let dict = dict_open(name)?;
+        Ok(Self {
+            md_keylist: "_metadata_keys".as_bytes().to_vec(),
+            dict,
+            name: name.to_string(),
+        })
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn get(&self, key: &[u8]) -> anyhow::Result< Option<Vec<u8>> > {
+        let ks = self.keys()?;
+        if ks.len() <= 0 {
+            return Ok(None);
+        }
+
+        if ks.get(key).is_some() {
+            if let Some(res) = self.dict.get(key)? {
+                Ok(Some( res.to_vec() ))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn set(&mut self, key: &[u8], value: &[u8]) -> anyhow::Result< Option<()> > {
+        let k = key.to_vec();
+        let mut ks = self.keys()?;
+
+        self.dict.insert(k.clone(), value.to_vec())?;
+        ks.insert(k);
+
+        self.dict.insert(self.md_keylist.clone(), bincode::serialize(&ks)?)?;
+        Ok( Some(()) )
+    }
+
+    pub fn keys(&self) -> anyhow::Result< HashSet<Vec<u8>> > {
+        if let Some(mdata) = self.dict.get(&self.md_keylist)? {
+            let mdata: Metadata = bincode::deserialize(&mdata)?;
+            match mdata.kind {
+                MetadataKind::KeyList(kl) => {
+                    return Ok(kl.clone());
+                },
+                _ => {
+                    return Err(anyhow::Error::msg("metadata type not equal KeyList"));
+                },
+            }
+        } else {
+            return Ok(HashSet::new());
+        }
+    }
 }
 
