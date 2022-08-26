@@ -220,7 +220,7 @@ jobs:
       - name:
         run: |
           python3 ./gitsha-incode.py
-          git add -A
+          git add build.rs
           git commit -m '{CI-auto-submit} Add git sha to build.rs'
           git push origin master
 
