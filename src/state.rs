@@ -463,7 +463,7 @@ impl SeedSchedule {
                             continue;
                         }
                     };
-                    if ! (coin_height <= current_height) {
+                    if coin_height <= current_height {
                         if (current_height - coin_height) > ttl {
                             log::debug!("ignore too old seed: ttl={}, coin={:?}", ttl, (&id,&data));
 
@@ -480,7 +480,7 @@ impl SeedSchedule {
                             continue;
                         }
                     } else {
-                        log::error!("seed_raw: current block num is less than seed located! still using");
+                        log::error!("seed_raw: current block num is less than seed located! [coin:{:?} > curr:{:?}] still using", coin_height, current_height);
                     }
                 }
                 seeds.insert(id, data);
