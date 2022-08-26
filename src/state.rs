@@ -65,6 +65,10 @@ impl MintState {
         //use thread_priority::{ set_current_thread_priority, ThreadPriority };
         use thread_priority::*;
 
+        // limit the thread count to less-than or equal to 255
+        // because CoinID.index just unsigned 8-bit integer.
+        assert!(threads <= 0xff);
+
         // we do not need to save the expired seeds, so just clone
         let curr_height = self.client.snapshot().await?.current_header().height.0;
         let raw_seeds = self.seed_handler.clone().raw(curr_height).await?;
@@ -85,11 +89,11 @@ impl MintState {
                 seeds_tx = Some(id.txhash);
             }
 
-            if self.seed_handler.bulk {
+            if self.seed_handler.send_bulk {
                 if val.value == CoinValue(threads as u128) {
                     for n in 0..threads {
                         let mut id = id.clone();
-                        id.idhash = n;
+                        id.index = n as u8;
                         seeds.push(id);
                     }
                 }
@@ -99,12 +103,13 @@ impl MintState {
         }
 
         // finialize the tx hash of seeds.
-        let seed_tx: TxHash = if let Some(h) = seeds_tx { h } else {
+        let seeds_tx: TxHash = if let Some(h) = seeds_tx { h } else {
             panic!("Failed to get a seed tx!!");
         };
         // make sure we have seeds to minting or panic
         assert!(seeds.len() >= threads);
 
+        log::info!("Starting mint for TX {}", seeds_tx);
         let on_progress = Arc::new(on_progress);
         let mut proof_thrs = Vec::new();
         for (idx, seed) in seeds.iter().copied().take(threads).enumerate() {
@@ -345,7 +350,7 @@ impl SeedSchedule {
         loop {
             let seedmap = self.raw(client.snapshot().await?.current_header().height.0).await?;
             if bulk {
-                for (id, data) in seedmap {
+                for (_, data) in seedmap {
                     if data.value == CoinValue(threads as u128) {
                         return Ok(());
                     }
