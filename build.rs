@@ -31,6 +31,21 @@ fn _dyna_git_commit_hash() -> String {
 }
 
 fn main() {
+    // CPU arch checks but try build anyway
+    if cfg!(any(target_arch="x86_64", target_arch="aarch64")) {
+        println!("Good CPU Arch: amd/ia 64-bit or arm 64-bit");
+    } else {
+        println!("Your CPU Arch is not tested and cannot make sure it works.");
+
+        if cfg!(target_arch="powerpc64") {
+            println!("Your CPU is 64-bit but a PowerPC arch, welcome for testing that");
+        }
+        if cfg!(not(target_pointer_width="64")) {
+            //#[cfg(any(target_arch="arm", target_arch="mips", target_arch="powerpc"))]
+            println!("Your CPU is not 64-bit! This Is Undefined And May Not Recommended");
+        }
+    }
+
     println!("cargo:rustc-env=GIT_COMMIT_HASH={}", git_commit_hash());
 }
 

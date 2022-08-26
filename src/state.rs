@@ -65,10 +65,51 @@ impl MintState {
         //use thread_priority::{ set_current_thread_priority, ThreadPriority };
         use thread_priority::*;
 
+        // limit the thread count to less-than or equal to 255
+        // because CoinID.index just unsigned 8-bit integer.
+        assert!(threads <= 0xff);
+
         // we do not need to save the expired seeds, so just clone
         let curr_height = self.client.snapshot().await?.current_header().height.0;
-        let seeds = self.seed_handler.clone().raw(curr_height).await?;
+        let raw_seeds = self.seed_handler.clone().raw(curr_height).await?;
 
+        // convert non-bulk & bulk seeds to general format
+        let mut seeds: Vec<CoinID> = vec![];
+        let mut seeds_tx: Option<TxHash> = None;
+        for (id, val) in raw_seeds {
+            if let Some(tx) = seeds_tx {
+                if id.txhash != tx {
+                    continue; /* (simple ignore other seeds) */
+
+                    /* (or just panic)
+                    panic!("unexpected different txhash of seeds!");
+                    */
+                }
+            } else {
+                seeds_tx = Some(id.txhash);
+            }
+
+            if self.seed_handler.send_bulk {
+                if val.value == CoinValue(threads as u128) {
+                    for n in 0..threads {
+                        let mut id = id.clone();
+                        id.index = n as u8;
+                        seeds.push(id);
+                    }
+                }
+            } else {
+                seeds.push(id);
+            }
+        }
+
+        // finialize the tx hash of seeds.
+        let seeds_tx: TxHash = if let Some(h) = seeds_tx { h } else {
+            panic!("Failed to get a seed tx!!");
+        };
+        // make sure we have seeds to minting or panic
+        assert!(seeds.len() >= threads);
+
+        log::info!("Starting mint for TX {}", seeds_tx);
         let on_progress = Arc::new(on_progress);
         let mut proof_thrs = Vec::new();
         for (idx, seed) in seeds.iter().copied().take(threads).enumerate() {
@@ -88,26 +129,35 @@ impl MintState {
             let on_progress = on_progress.clone();
 
             let proof_fut = std::thread::Builder::new().name(format!("Mint-{}", idx)).spawn(move || {
+                // try set min "nice value" for all mint threads.
                 if ThreadPriority::Min.set_for_current().is_err() {
-                    #[cfg(not(target_os="linux"))]
+                    #[cfg(not(target_os="windows"))]
                     {
-                        //TODO
-                        log::info!("mint thread cannot set lower nice value (platform-specified)");
-                    }
+                        // if without fields, will causes error in building, so do not uses "if cfg!"
+                        #[cfg(any(target_os="linux", target_os="android"))]
+                        let normal = NormalThreadSchedulePolicy::Batch;
+                        #[cfg(any(target_os="freebsd", target_os="macos"))]
+                        let normal = NormalThreadSchedulePolicy::Other;
 
-                    #[cfg(target_os="linux")]
-                    {
-                        if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch)) {
+                        if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(normal)) {
                             let sets = ThreadPriority::from_posix(ScheduleParams { sched_priority: n }).set_for_current();
-                            log::info!("thread n set nice result {:?}", sets);
+                            log::info!("thread {} set nice result {:?}", idx, sets);
                         } else {
-                            log::info!("cannot get min nice for linux");
+                            log::info!("cannot get min nice for posix");
                         }
                     }
+
+                    #[cfg(target_os="windows")]
+                    {
+                        let v: thread_priority::ThreadPriorityOsValue = thread_priority::windows::WinAPIThreadPriority::BackgroundModeBegin.into();
+                        let sets = ThreadPriority::Os(v).set_for_current();
+                        log::info!("thread {} set nice result {:?}", idx, sets);
+                    }
                 } else {
-                    log::info!("ok change priority to low for mint");
+                    log::info!("ok change priority to low for mint thread {}", idx);
                 }
 
+                // core function of melpow
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
@@ -307,9 +357,18 @@ impl SeedSchedule {
 
         let my_address = self.wallet.0.summary().await?.address;
         loop {
-            let toret = self.raw(client.snapshot().await?.current_header().height.0).await?;
-            if toret.len() >= threads {
-                return Ok(());
+            let seedmap = self.raw(client.snapshot().await?.current_header().height.0).await?;
+            if bulk {
+                for (_, data) in seedmap {
+                    if data.value == CoinValue(threads as u128) {
+                        return Ok(());
+                    }
+                }
+            } else {
+                // normal non-bulk
+                if seedmap.len() >= threads {
+                    return Ok(());
+                }
             }
 
             // generate a bunch of custom-token utxos
@@ -386,13 +445,13 @@ impl SeedSchedule {
     }
 
     // caller needs provide current block number: self.height(num)
-    async fn raw(&mut self, height: u64) -> surf::Result<Vec<CoinID>> {
+    async fn raw(&mut self, height: u64) -> surf::Result<HashMap<CoinID, CoinData>> {
         let unspent_coins = self.wallet.0.get_coins().await?;
 
         // valclient.snapshot().await?.current_header().height.0;
         let current_height = height;
 
-        let mut seeds = vec![];
+        let mut seeds = HashMap::new();
         for (id, data) in unspent_coins {
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
@@ -424,11 +483,11 @@ impl SeedSchedule {
                         log::error!("seed_raw: current block num is less than seed located! still using");
                     }
                 }
-                seeds.push(id);
+                seeds.insert(id, data);
             }
         }
 
-        log::debug!("got seeds list: {:?}", &seeds);
+        log::trace!("got seeds list: {:?}", &seeds);
         Ok(seeds)
     }
 

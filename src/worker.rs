@@ -66,10 +66,11 @@ impl Worker {
         self.send_stop.send(()).await?;
         Ok(())
     }
+    /*
     /// Waits for the worker to complete the current iteration
     pub async fn wait(self) -> surf::Result<()> {
         self._task.await
-    }
+    }*/
 }
 
 async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result<()> {
