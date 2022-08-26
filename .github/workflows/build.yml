@@ -194,6 +194,11 @@ jobs:
             echo "Skip any auto commit by bots"
             exit 100
           fi
+          if git log -1 | grep -F "#NOCI"
+          then
+            echo "This commit Disable CI"
+            exit 1
+          fi
 
       - name: Build Linux
         run: for i in {1..5};do echo try build $i; cargo build --release --verbose && break;done;
