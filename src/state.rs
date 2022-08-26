@@ -129,26 +129,35 @@ impl MintState {
             let on_progress = on_progress.clone();
 
             let proof_fut = std::thread::Builder::new().name(format!("Mint-{}", idx)).spawn(move || {
+                // try set min "nice value" for all mint threads.
                 if ThreadPriority::Min.set_for_current().is_err() {
-                    #[cfg(not(target_os="linux"))]
+                    #[cfg(not(target_os="windows"))]
                     {
-                        //TODO
-                        log::info!("mint thread cannot set lower nice value (platform-specified)");
-                    }
+                        // if without fields, will causes error in building, so do not uses "if cfg!"
+                        #[cfg(any(target_os="linux", target_os="android"))]
+                        let normal = NormalThreadSchedulePolicy::Batch;
+                        #[cfg(any(target_os="freebsd", target_os="macos"))]
+                        let normal = NormalThreadSchedulePolicy::Other;
 
-                    #[cfg(target_os="linux")]
-                    {
-                        if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch)) {
+                        if let Ok(n) = ThreadPriority::min_value_for_policy(ThreadSchedulePolicy::Normal(normal)) {
                             let sets = ThreadPriority::from_posix(ScheduleParams { sched_priority: n }).set_for_current();
-                            log::info!("thread n set nice result {:?}", sets);
+                            log::info!("thread {} set nice result {:?}", idx, sets);
                         } else {
-                            log::info!("cannot get min nice for linux");
+                            log::info!("cannot get min nice for posix");
                         }
                     }
+
+                    #[cfg(target_os="windows")]
+                    {
+                        let v: thread_priority::ThreadPriorityOsValue = thread_priority::windows::WinAPIThreadPriority::BackgroundModeBegin.into();
+                        let sets = ThreadPriority::Os(v).set_for_current();
+                        log::info!("thread {} set nice result {:?}", idx, sets);
+                    }
                 } else {
-                    log::info!("ok change priority to low for mint");
+                    log::info!("ok change priority to low for mint thread {}", idx);
                 }
 
+                // core function of melpow
                 (
                     tip_cdh,
                     melpow::Proof::generate_with_progress(
