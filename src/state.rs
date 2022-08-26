@@ -67,7 +67,43 @@ impl MintState {
 
         // we do not need to save the expired seeds, so just clone
         let curr_height = self.client.snapshot().await?.current_header().height.0;
-        let seeds = self.seed_handler.clone().raw(curr_height).await?;
+        let raw_seeds = self.seed_handler.clone().raw(curr_height).await?;
+
+        // convert non-bulk & bulk seeds to general format
+        let mut seeds: Vec<CoinID> = vec![];
+        let mut seeds_tx: Option<TxHash> = None;
+        for (id, val) in raw_seeds {
+            if let Some(tx) = seeds_tx {
+                if id.txhash != tx {
+                    continue; /* (simple ignore other seeds) */
+
+                    /* (or just panic)
+                    panic!("unexpected different txhash of seeds!");
+                    */
+                }
+            } else {
+                seeds_tx = Some(id.txhash);
+            }
+
+            if self.seed_handler.bulk {
+                if val.value == CoinValue(threads as u128) {
+                    for n in 0..threads {
+                        let mut id = id.clone();
+                        id.idhash = n;
+                        seeds.push(id);
+                    }
+                }
+            } else {
+                seeds.push(id);
+            }
+        }
+
+        // finialize the tx hash of seeds.
+        let seed_tx: TxHash = if let Some(h) = seeds_tx { h } else {
+            panic!("Failed to get a seed tx!!");
+        };
+        // make sure we have seeds to minting or panic
+        assert!(seeds.len() >= threads);
 
         let on_progress = Arc::new(on_progress);
         let mut proof_thrs = Vec::new();
@@ -307,9 +343,18 @@ impl SeedSchedule {
 
         let my_address = self.wallet.0.summary().await?.address;
         loop {
-            let toret = self.raw(client.snapshot().await?.current_header().height.0).await?;
-            if toret.len() >= threads {
-                return Ok(());
+            let seedmap = self.raw(client.snapshot().await?.current_header().height.0).await?;
+            if bulk {
+                for (id, data) in seedmap {
+                    if data.value == CoinValue(threads as u128) {
+                        return Ok(());
+                    }
+                }
+            } else {
+                // normal non-bulk
+                if seedmap.len() >= threads {
+                    return Ok(());
+                }
             }
 
             // generate a bunch of custom-token utxos
@@ -386,13 +431,13 @@ impl SeedSchedule {
     }
 
     // caller needs provide current block number: self.height(num)
-    async fn raw(&mut self, height: u64) -> surf::Result<Vec<CoinID>> {
+    async fn raw(&mut self, height: u64) -> surf::Result<HashMap<CoinID, CoinData>> {
         let unspent_coins = self.wallet.0.get_coins().await?;
 
         // valclient.snapshot().await?.current_header().height.0;
         let current_height = height;
 
-        let mut seeds = vec![];
+        let mut seeds = HashMap::new();
         for (id, data) in unspent_coins {
             if let Denom::Custom(_) = data.denom {
                 // if provides a TTL (unit: how many blocks), an expiration check will happen, it will ignore expired coins.
@@ -424,11 +469,11 @@ impl SeedSchedule {
                         log::error!("seed_raw: current block num is less than seed located! still using");
                     }
                 }
-                seeds.push(id);
+                seeds.insert(id, data);
             }
         }
 
-        log::debug!("got seeds list: {:?}", &seeds);
+        log::trace!("got seeds list: {:?}", &seeds);
         Ok(seeds)
     }
 
