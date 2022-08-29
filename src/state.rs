@@ -216,7 +216,7 @@ impl MintState {
         let mels = self.erg_to_mel(ergs).await?;
         if fees >= mels {
             log::warn!("WARNING: This doscMint fee({} MEL) great-than-or-equal to approx-income({} MEL) amount!! you should check your difficulty or a network issue.", fees, mels);
-            if fees > mels && (!is_testnet) && self.fee_handler.allow_any_tx {
+            if fees > mels && (!is_testnet) && (!self.fee_handler.allow_any_tx) {
                 return Err(surf::Error::new(403, anyhow::Error::msg("refused to send any high-fee tx.")));
             }
         }
