@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
+use std::hash::Hash;
 use std::time::SystemTime;
 use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 
-use boringdb;
+use sqlite3;
+//use boringdb;
 use dirs;
 use anyhow::Context;
 
@@ -29,20 +31,6 @@ pub const TABLE_BALANCES:   &str = "balance_history";
 /* All data formats:
  * No Any functions about to format/serde/generating-value.
  * just struct only. */
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Metadata {
-    table: String, // the name of table, or empty for global metadata table
-    kind: MetadataKind, // what type of this data, and that enum also data provided
-    info: String, // extra info for this
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum MetadataKind {
-    Log(LogRecord),
-    Nothing,
-    KeyList(HashSet<Vec<u8>>),
-    // come soon...
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogRecord {
@@ -120,82 +108,73 @@ pub fn confdir() -> Option<PathBuf> {
 }
 
 // Opens the database with fixed location, will creates file/dir if not found.
-pub fn db_open() -> anyhow::Result<boringdb::Database> {
+pub fn db_open() -> anyhow::Result< Arc<sqlite3::Connection> > {
     if let Some(dir) = confdir() {
         std::fs::DirBuilder::new()
             .recursive(true)
             .create(dir)?;
     }
 
-    Ok( boringdb::Database::open( db_path()? )? )
+    Ok(Arc::new( sqlite3::open( db_path()? )? ))
 }
 
-// just a "shortcut" for db_open().open_dict
-pub fn dict_open(name: &str) -> anyhow::Result<boringdb::Dict> {
-    let db = db_open()?;
-    Ok( db.open_dict(name)? )
-}
-
-/*
-pub struct Meta {
-    inner: boringdb::Dict,
+/// a helper for automatic serde
+#[derive(Clone)]
+pub struct Dict {
+    db: Option<Arc<sqlite3::Connection>>,
     table: String,
 }
-impl Meta {
-    pub fn new() -> anyhow::Result<boringdb::Dict> {
-        db_open(TABLE_METADATA)?
-    }
+impl Dict {
+    pub fn open(table: &str) -> anyhow::Result<Self> {
+        let table = table.to_string();
 
-    pub fn list_keys(&self) -> HashSet<Vec<u8>> {
-        let mut out = HashSet::new();
-        for md in self.inner.get()
-    }
-}
-*/
+        let db = db_open()?;
+        // create table using caller-specified name
+        let mut cu = db.prepare("CREATE TABLE IF NOT EXISTS ? (key BLOB NOT NULL UNIQUE, value BLOB NOT NULL)")?.cursor();
+        cu.bind(&[ sqlite3::Value::Binary(table.as_bytes().to_vec()) ]);
+        cu.next()?;
 
-/// a raw dict map for bytes -> bytes mapping
-#[derive(Clone)]
-pub struct DictMap {
-    md_keylist: Vec<u8>, // store name of metadata storage
-    dict: Option< Arc<boringdb::Dict> >,
-    name: String,
-}
-impl DictMap {
-    pub fn open(name: &str) -> anyhow::Result<Self> {
         Ok(Self {
-            md_keylist: (TABLE_METADATA.clone().to_owned()+".keys").as_bytes().to_vec(),
-            dict: Some( Arc::new(dict_open(name)?) ),
-            name: name.to_string(),
+            db: Some(db),
+            table,
         })
     }
+
     pub fn close(&mut self) -> bool {
-        if self.dict.is_some() {
-            self.dict = None;
+        if self.db.is_some() {
+            self.db = None;
             true
         } else {
             false
         }
     }
     pub fn is_closed(&self) -> bool {
-        self.dict.is_none()
+        self.db.is_none()
     }
 
     pub fn name(&self) -> String {
-        self.name.clone()
+        self.table.clone()
     }
 
-    pub fn get(&self, key: &[u8]) -> anyhow::Result< Option<Vec<u8>> > {
+    fn _insert(&self, key: &[u8], value: &[u8]) -> anyhow::Result<()> {
+        let mut cu = self.db.unwrap().prepare("INSERT INTO ? VALUES (?, ?)")?.cursor();
+        cu.bind( &[ sqlite3::Value::String(self.table.clone()), sqlite3::Value::Binary(key), sqlite3::Value::Binary(value) ] );
+    }
+
+    pub fn _get(&self, key: &[u8]) -> anyhow::Result< Option<Vec<u8>> > {
         if self.is_closed() {
             return Err(anyhow::Error::msg("try access to a closed dict map."));
         }
 
         let ks = self.keys()?;
         if ks.len() <= 0 {
+            // empty table...
             return Ok(None);
         }
 
         if ks.get(key).is_some() {
-            let dict = self.dict.as_ref().unwrap().as_ref();
+            self.db.execute
+//            let dict = self.dict.as_ref().unwrap().as_ref();
             if let Some(res) = dict.get(key)? {
                 Ok(Some( res.to_vec() ))
             } else {
@@ -205,34 +184,7 @@ impl DictMap {
             Ok(None)
         }
     }
-
-    // checked key valid value. returns .to_vec value if valid, or anyhow::Error as rejected.
-    // 1. key starts with '.' or '_' is keep to internal used (.field / _data); forbidden use these as general data store.
-    //        (also allow suffix _ or middle . for user-specified)
-    // 2. current only limited for write access
-    pub fn to_key(key: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let k = key.to_vec();
-
-        if k.starts_with(TABLE_METADATA.clone().as_bytes()) {
-            // Disallow modify to metadata
-            return Err(anyhow::Error::msg("Try read/write to Internal metadata!"));
-        }
-        match k[0] as char {
-            '_' => {
-                return Err(anyhow::Error::msg("Try access to Internal key prefix '_'"));
-            },
-            '.' => {
-                return Err(anyhow::Error::msg("invalid key starts with '.'"));
-            },
-            _ => {
-                // passing normal key
-            }
-        }
-
-        Ok(k)
-    }
-
-    pub fn set(&mut self, key: &[u8], value: &[u8]) -> anyhow::Result< Option<()> > {
+    pub fn _set(&mut self, key: &[u8], value: &[u8]) -> anyhow::Result< Option<()> > {
         if self.is_closed() {
             return Err(anyhow::Error::msg("try write to a closed dict map."));
         }
@@ -248,30 +200,52 @@ impl DictMap {
         Ok( Some(()) )
     }
 
-    pub fn keys(&self) -> anyhow::Result< HashSet<Vec<u8>> > {
-        let dict = self.dict.as_ref().unwrap().as_ref();
-        if let Some(mdata) = dict.get(&self.md_keylist)? {
-            let mdata: Metadata = bincode::deserialize(&mdata)?;
-            match mdata.kind {
-                MetadataKind::KeyList(kl) => {
-                    return Ok(kl.clone());
-                },
-                _ => {
-                    return Err(anyhow::Error::msg("metadata type not equal KeyList"));
-                },
-            }
+    pub fn get<K: Serialize, V: DeserializeOwned>(&self, key: K) -> anyhow::Result<Option< Box<V> >> {
+        let k = bincode::serialize(&key)?;
+        if let Some(v) = self._get(&k)? {
+            let out: V = bincode::deserialize(&v)?;
+            Ok(Some( Box::new(out) ))
         } else {
-            return Ok(HashSet::new());
+            Ok(None)
         }
     }
+    pub fn set<K: Serialize, V: Serialize>(&mut self, key: K, value: V) -> anyhow::Result<()> {
+        let k = bincode::serialize(&key)?;
+        let v = bincode::serialize(&value)?;
+        self._set( &k, &v );
+        Ok(())
+    }
 
+    pub fn items<K: DeserializeOwned + Eq + Hash, V: DeserializeOwned + PartialEq>(&self) -> anyhow::Result< HashMap<K, V> > {
+        let mut cu = self.db.unwrap().prepare("SELECT * FROM ?")?.cursor();
+        cu.bind(&[ sqlite3::Value::String(self.table.clone()) ]);
+
+        let mut map: HashMap<K, V> = HashMap::new();
+        while let Some(line) = cu.next()? {
+            let key: K = bincode::deserialize( line[0].as_binary().unwrap() )?;
+            let value: V = bincode::deserialize( line[1].as_binary().unwrap() )?;
+            map.insert( key, value );
+        }
+        Ok(map)
+    }
+
+    pub fn keys<K: DeserializeOwned + Eq + Hash>(&self) -> anyhow::Result< HashSet<K> > {
+        let mut set = HashSet::new();
+        for key in self.items::<K, _>::()?.keys() {
+            set.insert(*key);
+        }
+        Ok(set)
+    }
+/*
     pub fn flush(&self) -> anyhow::Result<()> {
         let dict = self.dict.as_ref().unwrap().as_ref();
         dict.flush()?;
         Ok(())
     }
+*/
 }
 
+/*
 /// a public interface for outside
 #[derive(Clone)]
 pub struct Map {
@@ -312,22 +286,6 @@ impl Map {
         DictMap::to_key(&k)
     }
 
-    pub fn get<K: Serialize, V: DeserializeOwned>(&self, key: K) -> anyhow::Result<Option< Box<V> >> {
-        let k = bincode::serialize(&key)?;
-        if let Some(v) = self.cur().get(&k)? {
-            let out: V = bincode::deserialize(&v)?;
-            Ok(Some( Box::new(out) ))
-        } else {
-            Ok(None)
-        }
-    }
-    pub fn set<K: Serialize, V: Serialize>(&mut self, key: K, value: V) -> anyhow::Result<()> {
-        let k = bincode::serialize(&key)?;
-        let v = bincode::serialize(&value)?;
-        self.cur().set( &k, &v );
-        Ok(())
-    }
-
     /// changes current dict mapping to specified name
     pub fn dict(&mut self, name: &str) -> anyhow::Result<()> {
         for i in 0 .. self.dicts.len() {
@@ -349,7 +307,7 @@ impl Map {
         Ok(())
     }
 
-    /// unset current mapping (NOTE this does not to "free" the object, please see self.clean() if you needs.
+    /// unset current mapping (NOTE this does not "free" the object, please see self.clean() if you needs.
     pub fn no_dict(&mut self) {
         self.curr = None;
     }
@@ -385,4 +343,5 @@ impl Map {
         }
     }
 }
+*/
 

@@ -111,6 +111,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
 
         /*let db = db_open()?;*/
         // create mapping for db
+        todo!();
         let mut map = db::Map::new();
         map.lower();
 
@@ -120,6 +121,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
         // A queue for any proofs that waiting to submit (global store / also possible from disk...)
         let mut submit_proofs: HashMap<TrySendProof, TrySendProofState> = HashMap::new();
         // init load from disk
+        /*
         for key in map.cur().keys()? {
             let key = bincode::deserialize(&key)?;
             if let Some(val) = map.get(&key)? {
@@ -127,7 +129,7 @@ async fn main_async(opts: WorkerConfig, recv_stop: Receiver<()>) -> surf::Result
             } else {
                 log::warn!("missing hit a key {:?} of TABLE_PROOF_LIST: unexpected none value! CHECK METADATA LOGIC", key);
             }
-        }
+        }*/
 
         // convert to Vec Deque
         let mut submit_proofs: VecDeque<(TrySendProof, TrySendProofState)> = {
